@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MainTabView: View {
     @StateObject private var session = UserSessionViewModel()
+    @StateObject private var appBlocking = AppBlockingViewModel()
 
     var body: some View {
         TabView {
@@ -15,6 +16,7 @@ struct MainTabView: View {
                 .tabItem { Label("마이페이지", systemImage: "person.crop.circle") }
         }
         .environmentObject(session)
+        .environmentObject(appBlocking)
         .onAppear { session.startObservingProfile() }
         .onDisappear { session.stopObservingProfile() }
     }

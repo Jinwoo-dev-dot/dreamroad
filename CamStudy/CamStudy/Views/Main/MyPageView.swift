@@ -1,10 +1,13 @@
 import Charts
+import FamilyControls
 import SwiftUI
 
 struct MyPageView: View {
     @EnvironmentObject private var authViewModel: AuthViewModel
     @EnvironmentObject private var session: UserSessionViewModel
+    @EnvironmentObject private var appBlocking: AppBlockingViewModel
     @StateObject private var statisticsViewModel = StatisticsViewModel()
+    @State private var isPresentingAppPicker = false
 
     var body: some View {
         NavigationStack {
@@ -13,6 +16,7 @@ struct MyPageView: View {
                     profileHeader
                     totalTimeCard
                     weeklyChart
+                    appBlockingSection
                 }
                 .padding(24)
             }
@@ -76,6 +80,47 @@ struct MyPageView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private var appBlockingSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("공부 중 앱 잠금")
+                .font(.headline)
+
+            if !appBlocking.isAuthorized {
+                Button("스크린타임 권한 요청") {
+                    appBlocking.requestAuthorization()
+                }
+            } else {
+                Button {
+                    isPresentingAppPicker = true
+                } label: {
+                    HStack {
+                        Text("잠글 앱 선택")
+                        Spacer()
+                        Text(appBlocking.hasSelection ? "설정됨" : "설정 안 함")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            Text("스터디룸에 입장해있는 동안 선택한 앱이 잠깁니다.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let errorMessage = appBlocking.errorMessage {
+                Text(errorMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .familyActivityPicker(isPresented: $isPresentingAppPicker, selection: $appBlocking.selection)
+        .onChange(of: appBlocking.selection) { _ in
+            appBlocking.saveSelection()
+        }
+    }
+
     private func formattedDuration(_ seconds: Int) -> String {
         let hours = seconds / 3600
         let minutes = (seconds % 3600) / 60
@@ -87,4 +132,5 @@ struct MyPageView: View {
     MyPageView()
         .environmentObject(AuthViewModel())
         .environmentObject(UserSessionViewModel())
+        .environmentObject(AppBlockingViewModel())
 }

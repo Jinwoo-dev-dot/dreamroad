@@ -2,6 +2,7 @@ import SwiftUI
 
 struct StudyRoomView: View {
     @EnvironmentObject private var session: UserSessionViewModel
+    @EnvironmentObject private var appBlocking: AppBlockingViewModel
     @StateObject private var viewModel: StudyRoomViewModel
     @Environment(\.dismiss) private var dismiss
 
@@ -16,6 +17,12 @@ struct StudyRoomView: View {
 
             Text(formattedElapsed)
                 .font(.system(size: 36, weight: .bold, design: .monospaced))
+
+            if appBlocking.isBlocking {
+                Label("앱 잠금 중", systemImage: "lock.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
 
             participantsRow
 
@@ -46,12 +53,14 @@ struct StudyRoomView: View {
         .onAppear {
             guard let userId = session.userId else { return }
             viewModel.enter(userId: userId, nickname: session.profile?.nickname ?? "익명")
+            appBlocking.startBlocking()
         }
         .onDisappear {
             if let userId = session.userId {
                 viewModel.leave(userId: userId)
             }
             viewModel.stopObserving()
+            appBlocking.stopBlocking()
         }
     }
 
@@ -162,4 +171,5 @@ private struct ChatBubble: View {
         ))
     }
     .environmentObject(UserSessionViewModel())
+    .environmentObject(AppBlockingViewModel())
 }

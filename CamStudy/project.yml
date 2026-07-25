@@ -22,6 +22,10 @@ targets:
       path: CamStudy/Info.plist
       properties:
         UILaunchScreen: {}
+    entitlements:
+      path: CamStudy/CamStudy.entitlements
+      properties:
+        com.apple.developer.family-controls: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.camstudy.app
