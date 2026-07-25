@@ -185,6 +185,14 @@ final class AuthViewModel: ObservableObject {
         step = .login
     }
 
+    func signOut() {
+        try? authService.signOut()
+        isAuthenticated = false
+        step = .login
+        loginEmail = ""
+        loginPassword = ""
+    }
+
     /// Converts a Korean local number ("010-1234-5678") to E.164 ("+821012345678").
     /// Numbers already starting with "+" are passed through unchanged.
     private func normalizedPhoneNumber(_ raw: String) -> String {

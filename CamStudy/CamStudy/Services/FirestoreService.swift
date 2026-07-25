@@ -37,20 +37,21 @@ final class FirestoreService {
         }
     }
 
-    func fetchProfile(userId: String, completion: @escaping (Result<UserProfile, Error>) -> Void) {
-        db.collection(usersCollection).document(userId).getDocument { snapshot, error in
+    func observeProfile(userId: String, onChange: @escaping (Result<UserProfile, Error>) -> Void) -> ListenerRegistration {
+        db.collection(usersCollection).document(userId).addSnapshotListener { snapshot, error in
             if let error {
-                completion(.failure(error))
+                onChange(.failure(error))
+                return
+            }
+            guard let snapshot, snapshot.exists else {
+                onChange(.failure(AuthServiceError.unknown))
                 return
             }
             do {
-                guard let profile = try snapshot?.data(as: UserProfile.self) else {
-                    completion(.failure(AuthServiceError.unknown))
-                    return
-                }
-                completion(.success(profile))
+                let profile = try snapshot.data(as: UserProfile.self)
+                onChange(.success(profile))
             } catch {
-                completion(.failure(error))
+                onChange(.failure(error))
             }
         }
     }
