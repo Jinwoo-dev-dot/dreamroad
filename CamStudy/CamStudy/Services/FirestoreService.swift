@@ -37,6 +37,26 @@ final class FirestoreService {
         }
     }
 
+    /// Users sharing the same `goal` string, excluding the caller. Client-side exclusion
+    /// avoids needing a composite index for an inequality filter on document ID.
+    func fetchGoalMates(goal: String, excludingUserId: String, completion: @escaping (Result<[UserProfile], Error>) -> Void) {
+        guard !goal.trimmingCharacters(in: .whitespaces).isEmpty else {
+            completion(.success([]))
+            return
+        }
+        db.collection(usersCollection)
+            .whereField("goal", isEqualTo: goal)
+            .getDocuments { snapshot, error in
+                if let error {
+                    completion(.failure(error))
+                    return
+                }
+                let mates = (snapshot?.documents.compactMap { try? $0.data(as: UserProfile.self) } ?? [])
+                    .filter { $0.id != excludingUserId }
+                completion(.success(mates))
+            }
+    }
+
     func observeProfile(userId: String, onChange: @escaping (Result<UserProfile, Error>) -> Void) -> ListenerRegistration {
         db.collection(usersCollection).document(userId).addSnapshotListener { snapshot, error in
             if let error {
