@@ -10,23 +10,26 @@ struct StudyRoomView: View {
     }
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 12) {
             Text(viewModel.room.name)
                 .font(.title2.bold())
 
             Text(formattedElapsed)
-                .font(.system(size: 44, weight: .bold, design: .monospaced))
+                .font(.system(size: 36, weight: .bold, design: .monospaced))
 
-            List(sortedParticipants, id: \.self) { nickname in
-                Text(nickname)
-            }
-            .listStyle(.plain)
+            participantsRow
+
+            Divider()
+
+            messagesList
 
             if let errorMessage = viewModel.errorMessage {
                 Text(errorMessage)
                     .font(.footnote)
                     .foregroundStyle(.red)
             }
+
+            messageInputBar
 
             Button(role: .destructive) {
                 dismiss()
@@ -37,7 +40,7 @@ struct StudyRoomView: View {
             .buttonStyle(.bordered)
             .padding(.horizontal)
         }
-        .padding(.top, 24)
+        .padding(.top, 16)
         .navigationTitle("스터디룸")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
@@ -52,6 +55,62 @@ struct StudyRoomView: View {
         }
     }
 
+    private var participantsRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(sortedParticipants, id: \.self) { nickname in
+                    Text(nickname)
+                        .font(.caption)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.thinMaterial, in: Capsule())
+                }
+            }
+            .padding(.horizontal)
+        }
+    }
+
+    private var messagesList: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 8) {
+                    ForEach(viewModel.messages) { message in
+                        ChatBubble(message: message, isMine: message.senderId == session.userId)
+                            .id(message.id)
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .onChange(of: viewModel.messages.count) { _ in
+                if let lastId = viewModel.messages.last?.id {
+                    withAnimation {
+                        proxy.scrollTo(lastId, anchor: .bottom)
+                    }
+                }
+            }
+        }
+    }
+
+    private var messageInputBar: some View {
+        HStack {
+            TextField("메시지 입력", text: $viewModel.draftMessage)
+                .textFieldStyle(.roundedBorder)
+
+            Button {
+                sendMessage()
+            } label: {
+                Image(systemName: "paperplane.fill")
+            }
+            .disabled(viewModel.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .padding(.horizontal)
+    }
+
+    private func sendMessage() {
+        guard let userId = session.userId else { return }
+        viewModel.sendMessage(senderId: userId, senderNickname: session.profile?.nickname ?? "익명")
+    }
+
     private var sortedParticipants: [String] {
         viewModel.room.participantNicknames.values.sorted()
     }
@@ -61,6 +120,30 @@ struct StudyRoomView: View {
         let minutes = (viewModel.elapsedSeconds % 3600) / 60
         let seconds = viewModel.elapsedSeconds % 60
         return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+    }
+}
+
+private struct ChatBubble: View {
+    let message: ChatMessage
+    let isMine: Bool
+
+    var body: some View {
+        VStack(alignment: isMine ? .trailing : .leading, spacing: 2) {
+            if !isMine {
+                Text(message.senderNickname)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Text(message.text)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    isMine ? Color.accentColor : Color.secondary.opacity(0.15),
+                    in: RoundedRectangle(cornerRadius: 14)
+                )
+                .foregroundStyle(isMine ? Color.white : Color.primary)
+        }
+        .frame(maxWidth: .infinity, alignment: isMine ? .trailing : .leading)
     }
 }
 

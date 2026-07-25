@@ -192,4 +192,34 @@ final class FirestoreService {
                 completion(.success(sessions))
             }
     }
+
+    private func messagesCollection(roomId: String) -> CollectionReference {
+        db.collection(studyRoomsCollection).document(roomId).collection("messages")
+    }
+
+    func observeMessages(roomId: String, onChange: @escaping (Result<[ChatMessage], Error>) -> Void) -> ListenerRegistration {
+        messagesCollection(roomId: roomId).addSnapshotListener { snapshot, error in
+            if let error {
+                onChange(.failure(error))
+                return
+            }
+            let messages = (snapshot?.documents.compactMap { try? $0.data(as: ChatMessage.self) } ?? [])
+                .sorted { $0.sentAt < $1.sentAt }
+            onChange(.success(messages))
+        }
+    }
+
+    func sendMessage(roomId: String, message: ChatMessage, completion: @escaping (Result<Void, Error>) -> Void) {
+        do {
+            try messagesCollection(roomId: roomId).document(message.id).setData(from: message) { error in
+                if let error {
+                    completion(.failure(error))
+                } else {
+                    completion(.success(()))
+                }
+            }
+        } catch {
+            completion(.failure(error))
+        }
+    }
 }

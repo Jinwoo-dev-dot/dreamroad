@@ -7,8 +7,11 @@ final class StudyRoomViewModel: ObservableObject {
     @Published var room: StudyRoom
     @Published var errorMessage: String?
     @Published var elapsedSeconds = 0
+    @Published var messages: [ChatMessage] = []
+    @Published var draftMessage = ""
 
     private var listener: ListenerRegistration?
+    private var messagesListener: ListenerRegistration?
     private var timerCancellable: AnyCancellable?
     private var enteredAt: Date?
     private let firestoreService = FirestoreService.shared
@@ -30,6 +33,29 @@ final class StudyRoomViewModel: ObservableObject {
             }
         }
         observeRoom()
+        observeMessages()
+    }
+
+    func sendMessage(senderId: String, senderNickname: String) {
+        let trimmed = draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let message = ChatMessage(
+            id: UUID().uuidString,
+            senderId: senderId,
+            senderNickname: senderNickname,
+            text: trimmed,
+            sentAt: Date()
+        )
+        draftMessage = ""
+
+        firestoreService.sendMessage(roomId: room.id, message: message) { [weak self] result in
+            Task { @MainActor in
+                if case .failure(let error) = result {
+                    self?.errorMessage = error.localizedDescription
+                }
+            }
+        }
     }
 
     func leave(userId: String) {
@@ -48,6 +74,8 @@ final class StudyRoomViewModel: ObservableObject {
     func stopObserving() {
         listener?.remove()
         listener = nil
+        messagesListener?.remove()
+        messagesListener = nil
     }
 
     private func startTimer() {
@@ -102,6 +130,20 @@ final class StudyRoomViewModel: ObservableObject {
                 switch result {
                 case .success(let room):
                     self.room = room
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func observeMessages() {
+        messagesListener = firestoreService.observeMessages(roomId: room.id) { [weak self] result in
+            Task { @MainActor in
+                guard let self else { return }
+                switch result {
+                case .success(let messages):
+                    self.messages = messages
                 case .failure(let error):
                     self.errorMessage = error.localizedDescription
                 }
