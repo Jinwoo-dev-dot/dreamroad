@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  This is a placeholder. Download the real GoogleService-Info.plist from the
+  Firebase console (Project settings > Your apps > iOS app) and save it as
+  CamStudy/Resources/GoogleService-Info.plist (without the .example suffix).
+  That file is gitignored because it contains project-specific identifiers.
+-->
+<plist version="1.0">
+<dict>
+    <key>API_KEY</key>
+    <string>REPLACE_ME</string>
+    <key>BUNDLE_ID</key>
+    <string>com.camstudy.app</string>
+    <key>PROJECT_ID</key>
+    <string>REPLACE_ME</string>
+    <key>STORAGE_BUCKET</key>
+    <string>REPLACE_ME</string>
+    <key>GOOGLE_APP_ID</key>
+    <string>REPLACE_ME</string>
+    <key>GCM_SENDER_ID</key>
+    <string>REPLACE_ME</string>
+    <key>IS_SIGNIN_ENABLED</key>
+    <true/>
+</dict>
+</plist>
