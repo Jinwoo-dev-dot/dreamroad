@@ -8,6 +8,7 @@ final class FirestoreService {
     private let db = Firestore.firestore()
     private let usersCollection = "users"
     private let studyRoomsCollection = "studyRooms"
+    private let studySessionsCollection = "studySessions"
 
     func createProfile(_ profile: UserProfile, completion: @escaping (Result<Void, Error>) -> Void) {
         do {
@@ -127,5 +128,47 @@ final class FirestoreService {
                 completion(.success(()))
             }
         }
+    }
+
+    func saveStudySession(_ session: StudySession, completion: @escaping (Result<Void, Error>) -> Void) {
+        do {
+            try db.collection(studySessionsCollection).document(session.id).setData(from: session) { error in
+                if let error {
+                    completion(.failure(error))
+                } else {
+                    completion(.success(()))
+                }
+            }
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    func incrementTotalStudySeconds(userId: String, by seconds: Int, completion: @escaping (Result<Void, Error>) -> Void) {
+        db.collection(usersCollection).document(userId).updateData([
+            "totalStudySeconds": FieldValue.increment(Int64(seconds)),
+        ]) { error in
+            if let error {
+                completion(.failure(error))
+            } else {
+                completion(.success(()))
+            }
+        }
+    }
+
+    /// Fetches all sessions for a user, sorted newest first client-side (avoids requiring
+    /// a composite index for `userId == ...` + `orderBy(startedAt)`).
+    func fetchStudySessions(userId: String, completion: @escaping (Result<[StudySession], Error>) -> Void) {
+        db.collection(studySessionsCollection)
+            .whereField("userId", isEqualTo: userId)
+            .getDocuments { snapshot, error in
+                if let error {
+                    completion(.failure(error))
+                    return
+                }
+                let sessions = (snapshot?.documents.compactMap { try? $0.data(as: StudySession.self) } ?? [])
+                    .sorted { $0.startedAt > $1.startedAt }
+                completion(.success(sessions))
+            }
     }
 }

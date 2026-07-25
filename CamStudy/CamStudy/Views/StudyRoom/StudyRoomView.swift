@@ -14,6 +14,9 @@ struct StudyRoomView: View {
             Text(viewModel.room.name)
                 .font(.title2.bold())
 
+            Text(formattedElapsed)
+                .font(.system(size: 44, weight: .bold, design: .monospaced))
+
             List(sortedParticipants, id: \.self) { nickname in
                 Text(nickname)
             }
@@ -51,6 +54,13 @@ struct StudyRoomView: View {
 
     private var sortedParticipants: [String] {
         viewModel.room.participantNicknames.values.sorted()
+    }
+
+    private var formattedElapsed: String {
+        let hours = viewModel.elapsedSeconds / 3600
+        let minutes = (viewModel.elapsedSeconds % 3600) / 60
+        let seconds = viewModel.elapsedSeconds % 60
+        return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
     }
 }
 
