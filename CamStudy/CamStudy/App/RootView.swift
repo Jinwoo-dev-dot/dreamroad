@@ -6,7 +6,8 @@ struct RootView: View {
     var body: some View {
         Group {
             if authViewModel.isAuthenticated {
-                MainPlaceholderView()
+                MainTabView()
+                    .environmentObject(authViewModel)
             } else {
                 switch authViewModel.step {
                 case .login:
