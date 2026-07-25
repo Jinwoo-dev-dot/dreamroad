@@ -1,0 +1,13 @@
+# Xcode / XcodeGen generated
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+DerivedData/
+.build/
+.swiftpm/
+
+# Firebase secrets
+CamStudy/Resources/GoogleService-Info.plist
+
+# macOS
+.DS_Store
