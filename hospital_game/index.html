@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DREAM ROAD: 종합병원 간호일지</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="controls-hint">
+    마우스 클릭으로 진행 · 붕대/깁스는 환부 위를 마우스로 드래그해서 직접 감아주세요
+  </div>
+
+  <div id="title-screen">
+    <div class="title-box">
+      <h1>DREAM ROAD</h1>
+      <h2>종합병원 간호일지</h2>
+      <p class="lede">
+        오늘도 하루가 시작된다 —<br />
+        무엇을 입을지 고르고, 물품을 채우고, 환자를 맞이한다.
+      </p>
+      <button id="start-btn">출근 준비 시작</button>
+      <div class="howto">
+        <p><b>하루의 흐름</b></p>
+        <p>1. 옷장에서 오늘 입을 유니폼·스타킹·신발·헤어를 고르고 출근합니다.</p>
+        <p>2. 물품창고에서 붕대·주사기·깁스·약품·수액을 10개씩 채워넣습니다.</p>
+        <p>3. 환자가 찾아와 증상을 말하면, 정형외과·내과·안과·치과 중 알맞은 곳으로 안내합니다.</p>
+        <p>4. 진료과마다 정해진 처방에 따라 직접 치료합니다 — 붕대는 마우스로 직접 감고,
+           깁스는 패딩→깁스 붕대→굳히기 순으로, 수액은 혈관을 찾아 바늘을 꽂고 테이프로
+           고정한 뒤 수액백을 걸고, 약은 처방전과 일치하는 약을 선반에서 골라 전달합니다.</p>
+        <p>5. 환자 10명을 모두 진료하면 퇴근하고, 다음 날 다시 옷을 고르며 하루가 이어집니다.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/util.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/wardrobe.js"></script>
+  <script src="js/commute.js"></script>
+  <script src="js/supply.js"></script>
+  <script src="js/station.js"></script>
+  <script src="js/treatments.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
