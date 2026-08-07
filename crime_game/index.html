@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DREAM ROAD: 크라임 시티</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="controls-hint">
+    마우스: 이동/조준&nbsp;·&nbsp;클릭: 공격&nbsp;·&nbsp;1/2/3: 무기 교체&nbsp;·&nbsp;E: 상호작용
+  </div>
+
+  <div id="title-screen">
+    <div class="title-box">
+      <h1>DREAM ROAD</h1>
+      <h2>크라임 시티</h2>
+      <p class="lede">
+        평범한 하루로 시작해, 스스로의 선택이 만드는 결과까지 —<br />
+        도시를 누비고, 붙잡히고, 대가를 치른다.
+      </p>
+      <button id="start-btn">시작하기</button>
+      <div class="howto">
+        <p><b>조작법</b></p>
+        <p>마우스를 움직이면 캐릭터가 커서를 따라 걷거나 뜁니다.</p>
+        <p>집 안에서 칼과 총을 챙긴 뒤, 숫자키 1/2/3 으로 무기를 바꾸세요.</p>
+        <p>마우스 클릭으로 공격, E 키로 문 열기·훔치기·줍기 등을 상호작용합니다.</p>
+        <p>범죄를 저지르면 경찰이 출동합니다 — 붙잡히면 수갑을 차고 경찰서를 거쳐 교도소로 이송됩니다.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/util.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/entities.js"></script>
+  <script src="js/interiors.js"></script>
+  <script src="js/arrest.js"></script>
+  <script src="js/jail.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
