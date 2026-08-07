@@ -18,6 +18,7 @@ function createPlayer() {
     animTimer: 0,
     weapon: 'fists', // fists/knife/gun
     inv: { knife: false, gun: false },
+    ammo: 0,
     atkCooldown: 0,
     atkTimer: 0,
     atkApplied: false,
@@ -93,8 +94,16 @@ function triggerPlayerAttack() {
     p.state = 'attackKnife';
     p.atkCooldown = 0.5;
   } else if (p.weapon === 'gun') {
-    p.state = 'attackGun';
     p.atkCooldown = 0.28;
+    if (p.ammo <= 0) {
+      p.state = 'idle';
+      if (typeof sfxDryFire === 'function') sfxDryFire();
+      setSubtitle('', 1, '철컥... 탄약이 없다.');
+      p.atkTimer = 0; p.atkApplied = true;
+      return;
+    }
+    p.ammo -= 1;
+    p.state = 'attackGun';
     p.recoil = 1;
     const bx = p.x + Math.cos(p.facing) * 22;
     const by = p.y + Math.sin(p.facing) * 22;
@@ -154,12 +163,20 @@ function playerCheckInteractionPrompt() {
       }
     }
   }
+  if (State.mode === 'city' && State.dealer) {
+    const d = dist(State.player.x, State.player.y, State.dealer.x, State.dealer.y);
+    if (d < 55) {
+      State.prompt = State.player.inv.gun
+        ? 'E : 탄약 구매 (💰50 → 총알 6발)'
+        : 'E : 말 걸기';
+    }
+  }
 }
 
 // ---------- Combat resolution ----------
 function combatHit(target, weapon) {
   if (target.kind === 'npc') killNpc(target);
-  else if (target.kind === 'police') woundPolice(target);
+  else if (target.kind === 'police') killPolice(target);
 }
 
 function killNpc(npc) {
@@ -180,11 +197,18 @@ function killNpc(npc) {
   }
 }
 
-function woundPolice(officer) {
-  spawnBloodBurst(officer.x, officer.y, 5);
-  officer.stagger = 0.5;
-  addWanted(5, '경찰 공격');
-  for (const p of State.police) p.state = 'chase';
+function killPolice(officer) {
+  if (officer.state === 'dead') return;
+  officer.state = 'dead';
+  officer.deathT = 0;
+  officer.fallDir = officer.facing + rand(-0.4, 0.4);
+  officer.decalDone = false;
+  spawnBloodBurst(officer.x, officer.y, 14);
+  State.stats.copKills = (State.stats.copKills || 0) + 1;
+  addWanted(5, '경찰관 살해');
+  for (const p of State.police) if (p !== officer && p.state !== 'dead') p.state = 'chase';
+  policeSpawnNear(officer.x, officer.y);
+  policeSpawnNear(officer.x, officer.y);
 }
 
 function spawnBloodBurst(x, y, n) {
@@ -277,13 +301,16 @@ function policeCreate(x, y) {
   return {
     kind: 'police',
     x, y, radius: 13,
-    state: 'chase', // chase/leaving
+    state: 'chase', // chase/leaving/dead
     facing: 0,
     animTimer: 0,
     speed: 0,
     grabTimer: 0,
     stagger: 0,
     leaveTimer: 0,
+    deathT: 0,
+    fallDir: 0,
+    decalDone: false,
   };
 }
 
@@ -303,6 +330,14 @@ function policeSpawnNear(px, py) {
 
 function policeUpdate(officer, dt) {
   officer.animTimer += dt;
+
+  if (officer.state === 'dead') {
+    officer.deathT += dt;
+    officer.speed = 0;
+    if (officer.deathT > 14) officer.removeMe = true;
+    return;
+  }
+
   if (officer.stagger > 0) officer.stagger -= dt;
 
   if (State.wanted <= 0) {
@@ -367,10 +402,10 @@ function particlesUpdate(dt) {
   }
   State.particles = State.particles.filter(pt => pt.life > 0);
 
-  for (const npc of State.npcs) {
-    if (npc.state === 'dead' && npc.deathT > 0.4 && !npc.decalDone) {
-      npc.decalDone = true;
-      State.decals.push({ x: npc.x, y: npc.y, r: rand(16, 24), a: 0.85 });
+  for (const e of [...State.npcs, ...State.police]) {
+    if (e.state === 'dead' && e.deathT > 0.4 && !e.decalDone) {
+      e.decalDone = true;
+      State.decals.push({ x: e.x, y: e.y, r: rand(16, 24), a: 0.85 });
     }
   }
 }
@@ -523,6 +558,17 @@ function drawNpc(ctx, npc) {
     ctx.fillText('!', 0, 0);
     ctx.restore();
   }
+}
+
+function drawDealer(ctx, dealer) {
+  drawPerson(ctx, dealer, { bodyColor: dealer.color, headColor: SKIN, weapon: 'none' });
+  ctx.save();
+  ctx.translate(dealer.x, dealer.y - 28);
+  ctx.fillStyle = '#8affb0';
+  ctx.font = 'bold 15px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('$', 0, 0);
+  ctx.restore();
 }
 
 function drawPoliceOfficer(ctx, officer) {

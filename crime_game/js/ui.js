@@ -46,19 +46,24 @@ function drawWantedStars(ctx) {
 
 function drawCriminalRecord(ctx) {
   const s = State.stats;
+  const capital = s.kills >= 4 || s.copKills > 0 || s.escaped > 0;
   ctx.font = '13px sans-serif';
   ctx.textAlign = 'left';
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  ctx.fillRect(14, 58, 190, 28);
-  ctx.fillStyle = s.kills >= 4 ? '#ff5a5a' : '#dcdcdc';
+  ctx.fillRect(14, 58, 230, s.copKills > 0 || s.escaped > 0 ? 46 : 28);
+  ctx.fillStyle = capital ? '#ff5a5a' : '#dcdcdc';
   ctx.fillText('🔪 살해 ' + s.kills + '  🛒 절도 ' + s.thefts + '  💰 ' + s.cash, 22, 77);
+  if (s.copKills > 0 || s.escaped > 0) {
+    ctx.fillStyle = '#ff5a5a';
+    ctx.fillText('🚓 경찰 살해 ' + s.copKills + '  🕳 탈옥 ' + s.escaped + ' (사형 확정)', 22, 95);
+  }
 }
 
 function drawWeaponBar(ctx) {
   const items = [
     { key: '1', name: '맨손', has: true, weapon: 'fists' },
     { key: '2', name: '칼', has: State.player.inv.knife, weapon: 'knife' },
-    { key: '3', name: '총', has: State.player.inv.gun, weapon: 'gun' },
+    { key: '3', name: '총(' + State.player.ammo + ')', has: State.player.inv.gun, weapon: 'gun' },
   ];
   const bw = 74, bh = 54, gap = 8;
   const totalW = items.length * bw + (items.length - 1) * gap;
@@ -151,9 +156,14 @@ function drawJailHud(ctx) {
   ctx.font = 'bold 20px sans-serif';
   ctx.fillText(fmtClock(J.minutes), State.w / 2, 38);
   ctx.font = '13px sans-serif';
-  ctx.fillStyle = '#ffd23f';
   const remain = Math.max(0, J.sentenceDays - J.servedDays);
-  ctx.fillText('복역 ' + (J.servedDays + 1) + '/' + J.sentenceDays + '일째 · 남은 형기 ' + remain + '일 · ' + (J.current ? J.current.label : ''), State.w / 2, 58);
+  if (J.isDeathRow) {
+    ctx.fillStyle = '#ff5a5a';
+    ctx.fillText('사형수 독방 · 집행까지 D-' + remain + ' · ' + (J.current ? J.current.label : ''), State.w / 2, 58);
+  } else {
+    ctx.fillStyle = '#ffd23f';
+    ctx.fillText('복역 ' + (J.servedDays + 1) + '/' + J.sentenceDays + '일째 · 남은 형기 ' + remain + '일 · ' + (J.current ? J.current.label : ''), State.w / 2, 58);
+  }
 
   if (J.releasing) {
     const t = clamp(J.releaseT / 2.6, 0, 1);

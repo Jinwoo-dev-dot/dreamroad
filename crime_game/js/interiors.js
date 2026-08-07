@@ -64,6 +64,10 @@ function exitStoreToCity() {
 
 function tryInteract() {
   if (State.mode === 'city') {
+    if (State.dealer && dist(State.player.x, State.player.y, State.dealer.x, State.dealer.y) < 55) {
+      dealerInteract();
+      return;
+    }
     const near = worldNearestDoor(State.player.x, State.player.y, 55);
     if (!near) return;
     if (near === World.home) enterHome();
@@ -77,7 +81,8 @@ function tryInteract() {
     } else if (!State.homeTaken.gun && dist(State.player.x, State.player.y, HomeInterior.gunSpot.x, HomeInterior.gunSpot.y) < 40) {
       State.homeTaken.gun = true;
       State.player.inv.gun = true;
-      setSubtitle('총을 챙겼다.', 1.6);
+      State.player.ammo = 6;
+      setSubtitle('총을 챙겼다. (장전된 총알 6발)', 1.8);
     } else if (dist(State.player.x, State.player.y, HomeInterior.exit.x, HomeInterior.exit.y) < 50) {
       exitHomeToCity();
     }
@@ -95,6 +100,21 @@ function tryInteract() {
       }
     }
   }
+}
+
+function dealerInteract() {
+  if (!State.player.inv.gun) {
+    setSubtitle('밀거래상', 2, '"총도 없으면서 왜 왔어. 꺼져."');
+    return;
+  }
+  if (State.stats.cash < 50) {
+    setSubtitle('밀거래상', 2, '"돈이 부족한데. 50원은 가져와야지."');
+    return;
+  }
+  State.stats.cash -= 50;
+  State.player.ammo += 6;
+  if (typeof sfxCoin === 'function') sfxCoin();
+  setSubtitle('밀거래상', 2, '"자, 총알 6발. 조용히 써라."');
 }
 
 function stealItem(store, shelf) {

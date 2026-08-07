@@ -9,6 +9,7 @@ function computeCameraBounds() {
     case 'store': return { w: StoreInterior.w, h: StoreInterior.h };
     case 'jail': return { w: JailLayout.w, h: JailLayout.h };
     case 'trial': return { w: TrialLayout.w, h: TrialLayout.h };
+    case 'execution': return { w: ExecutionLayout.w, h: ExecutionLayout.h };
     default: return { w: World.width, h: World.height };
   }
 }
@@ -48,6 +49,7 @@ function update(dt) {
     for (const npc of State.npcs) npcUpdate(npc, dt);
   } else if (State.mode === 'trial') trialUpdate(dt);
   else if (State.mode === 'jail') jailUpdate(dt);
+  else if (State.mode === 'execution') executionUpdate(dt);
   else return; // title / ending: no world simulation
 
   particlesUpdate(dt);
@@ -57,9 +59,11 @@ function update(dt) {
 function drawCityScene(ctx) {
   worldDraw(ctx);
   for (const npc of State.npcs) if (npc.state === 'dead') drawNpc(ctx, npc);
+  for (const p of State.police) if (p.state === 'dead') drawPoliceOfficer(ctx, p);
   for (const car of State.cars) drawCar(ctx, car);
+  if (State.dealer) drawDealer(ctx, State.dealer);
   for (const npc of State.npcs) if (npc.state !== 'dead') drawNpc(ctx, npc);
-  for (const p of State.police) drawPoliceOfficer(ctx, p);
+  for (const p of State.police) if (p.state !== 'dead') drawPoliceOfficer(ctx, p);
   drawBullets(ctx);
   drawParticles(ctx);
   if (!(State.arrest && State.arrest.hidePlayer)) drawPlayer(ctx);
@@ -81,6 +85,7 @@ function render() {
   else if (State.mode === 'store') drawStore(ctx);
   else if (State.mode === 'trial') trialDraw(ctx);
   else if (State.mode === 'jail') jailDraw(ctx);
+  else if (State.mode === 'execution') executionDraw(ctx);
 
   ctx.restore();
   uiDraw(ctx);
@@ -106,6 +111,7 @@ function startGame() {
   initAudio();
   worldGenerate();
   npcSpawnAll(45);
+  State.dealer = World.dealerSpot ? { kind: 'npc', x: World.dealerSpot.x, y: World.dealerSpot.y, radius: 12, facing: -Math.PI / 2, animTimer: 0, speed: 0, color: '#3a2e4a' } : null;
   State.player = createPlayer();
   State.day = 1;
   State.wanted = 0;
@@ -115,10 +121,11 @@ function startGame() {
   State.particles = [];
   State.decals = [];
   State.homeTaken = { knife: false, gun: false };
-  State.stats = { kills: 0, thefts: 0, cash: 0 };
+  State.stats = { kills: 0, thefts: 0, cash: 0, copKills: 0, escaped: 0 };
   State.arrest = null;
   State.trial = null;
   State.jail = null;
+  State.execution = null;
   enterHome();
   updateCamera(false);
   showTitleScreen(false);

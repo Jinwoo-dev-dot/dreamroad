@@ -54,6 +54,10 @@ function sfxBuzzer() { playTone(300, 0.4, 'square', 0.18); playTone(300, 0.4, 's
 function sfxGavel() { playNoise(0.06, 0.5, 400); playTone(120, 0.08, 'square', 0.3); }
 function sfxRelease() { [523, 659, 784, 1047].forEach((f, i) => playTone(f, 0.25, 'triangle', 0.2, i * 0.12)); }
 function sfxToll() { playTone(110, 1.2, 'sine', 0.3); playTone(110, 1.2, 'sine', 0.2, 1.3); }
+function sfxDryFire() { playTone(200, 0.04, 'square', 0.12); }
+function sfxEscape() { [400, 500, 650, 800].forEach((f, i) => playTone(f, 0.18, 'sawtooth', 0.15, i * 0.08)); }
+function sfxCaughtEscaping() { playTone(180, 0.3, 'sawtooth', 0.25); playTone(140, 0.35, 'sawtooth', 0.22, 0.15); }
+function sfxCoin() { playTone(1400, 0.08, 'square', 0.15); playTone(1800, 0.08, 'square', 0.12, 0.06); }
 
 function sirenStart() {
   if (!AudioSys.ctx || AudioSys.siren) return;

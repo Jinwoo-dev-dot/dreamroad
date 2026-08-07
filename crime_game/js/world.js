@@ -32,10 +32,13 @@ function worldGenerate() {
   World.waypoints = [];
   World.parkRects = [];
 
-  const storeIdxs = new Set();
-  while (storeIdxs.size < 5) storeIdxs.add(randInt(1, cols * rows - 1));
   const parkIdx = cols * rows - 2;
   const policeIdx = cols * rows - 1;
+  const storeIdxs = new Set();
+  while (storeIdxs.size < 5) {
+    const v = randInt(1, cols * rows - 1);
+    if (v !== parkIdx && v !== policeIdx) storeIdxs.add(v);
+  }
 
   let storeCounter = 0;
   for (let r = 0; r < rows; r++) {
@@ -58,6 +61,7 @@ function worldGenerate() {
 
       if (cell.type === 'park') {
         World.parkRects.push(buildRect);
+        World.dealerSpot = { x: buildRect.x + buildRect.w / 2 + 40, y: buildRect.y + buildRect.h / 2 + 30 };
       } else {
         World.buildings.push(buildRect);
         // door centered on bottom edge of building

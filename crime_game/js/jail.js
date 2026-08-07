@@ -12,6 +12,7 @@ const JailLayout = {
   workroom: { x: 320, y: 230, w: 260, h: 200 },
   yard: { x: 620, y: 230, w: 300, h: 370 },
   commonBounds: { x: 20, y: 40, w: 900, h: 560 },
+  escapeSpot: { x: 650, y: 570 },
 };
 
 // schedule: minute-of-day -> event
@@ -35,7 +36,7 @@ function jailFindEvent(minuteOfDay) {
   return ev;
 }
 
-function jailInit(sentenceDays) {
+function jailInit(sentenceDays, isDeathRow) {
   State.jail = {
     minutes: 1090, // arrive in the evening (자유 시간)
     lastEventTime: -1,
@@ -48,6 +49,9 @@ function jailInit(sentenceDays) {
     servedDays: 0,
     releasing: false,
     releaseT: 0,
+    isDeathRow: !!isDeathRow,
+    executing: false,
+    escapeT: 0,
   };
   State.player.x = JailLayout.cell.x + JailLayout.cell.w / 2;
   State.player.y = JailLayout.cell.y + JailLayout.cell.h / 2;
@@ -57,15 +61,23 @@ function jailInit(sentenceDays) {
   State.jail.guards = [
     { x: 60, y: 180, dir: 1, radius: 13, animTimer: 0, speed: 0, facing: 0, kind: 'guard' },
     { x: 700, y: 180, dir: -1, radius: 13, animTimer: rand(0, 5), speed: 0, facing: Math.PI, kind: 'guard' },
+    {
+      x: JailLayout.yard.x + 60, y: JailLayout.yard.y + 50, radius: 13, animTimer: 0, speed: 0, facing: 0, kind: 'guard', yard: true,
+      patrolA: { x: JailLayout.yard.x + 60, y: JailLayout.yard.y + 50 },
+      patrolB: { x: JailLayout.escapeSpot.x + 20, y: JailLayout.escapeSpot.y - 60 },
+      toward: 'B',
+    },
   ];
   State.jail.inmates = [];
-  for (let i = 0; i < 6; i++) {
-    State.jail.inmates.push({
-      kind: 'inmate', x: rand(700, 880), y: rand(260, 560), radius: 12,
-      target: { x: rand(650, 900), y: rand(240, 580) },
-      pauseTimer: rand(0.5, 2), facing: 0, animTimer: rand(0, 5), speed: 0,
-      color: '#e8791f',
-    });
+  if (!isDeathRow) {
+    for (let i = 0; i < 6; i++) {
+      State.jail.inmates.push({
+        kind: 'inmate', x: rand(700, 880), y: rand(260, 560), radius: 12,
+        target: { x: rand(650, 900), y: rand(240, 580) },
+        pauseTimer: rand(0.5, 2), facing: 0, animTimer: rand(0, 5), speed: 0,
+        color: '#e8791f',
+      });
+    }
   }
 }
 
@@ -95,6 +107,12 @@ function jailUpdate(dt) {
     State.day += 1;
     J.servedDays += 1;
     if (J.servedDays >= J.sentenceDays) {
+      if (J.isDeathRow) {
+        J.executing = true;
+        setSubtitle('교도관', 3, '집행일이 밝았습니다.');
+        startExecutionSequence();
+        return;
+      }
       J.releasing = true;
       J.releaseT = 0;
       State.player.controlLocked = true;
@@ -102,7 +120,11 @@ function jailUpdate(dt) {
       if (typeof sfxRelease === 'function') sfxRelease();
       return;
     }
-    setSubtitle('교도소', 2.5, State.day + '일째 아침이 밝았습니다. (남은 형기 ' + (J.sentenceDays - J.servedDays) + '일)');
+    if (J.isDeathRow) {
+      setSubtitle('교도소', 2.5, '사형 집행까지 D-' + (J.sentenceDays - J.servedDays) + '.');
+    } else {
+      setSubtitle('교도소', 2.5, State.day + '일째 아침이 밝았습니다. (남은 형기 ' + (J.sentenceDays - J.servedDays) + '일)');
+    }
   }
 
   const ev = jailFindEvent(Math.floor(J.minutes));
@@ -137,15 +159,32 @@ function jailUpdate(dt) {
   p.animTimer += dt;
   p.state = p.speed > 130 ? 'run' : (p.speed > 5 ? 'walk' : 'idle');
 
-  // guards patrol corridor
+  // guards patrol corridor (or the yard, for the dedicated yard guard)
   for (const g of J.guards) {
     g.animTimer += dt;
-    g.speed = 70;
-    g.x += g.dir * g.speed * dt;
-    g.facing = g.dir > 0 ? 0 : Math.PI;
-    if (g.x > 860) g.dir = -1;
-    if (g.x < 60) g.dir = 1;
+    if (g.yard) {
+      const target = g.toward === 'B' ? g.patrolB : g.patrolA;
+      const dgx = target.x - g.x, dgy = target.y - g.y;
+      const dg = Math.hypot(dgx, dgy);
+      g.speed = 45;
+      if (dg < 8) {
+        g.toward = g.toward === 'B' ? 'A' : 'B';
+      } else {
+        g.facing = Math.atan2(dgy, dgx);
+        g.x += (dgx / dg) * g.speed * dt;
+        g.y += (dgy / dg) * g.speed * dt;
+      }
+    } else {
+      g.speed = 60;
+      g.x += g.dir * g.speed * dt;
+      g.facing = g.dir > 0 ? 0 : Math.PI;
+      if (g.x > 860) g.dir = -1;
+      if (g.x < 60) g.dir = 1;
+    }
   }
+
+  jailEscapeUpdate(dt);
+  if (!State.jail) return; // a successful jailbreak just tore down the jail scene
 
   // ambient inmates wander within common bounds (skip while locked - stay in their own bunks conceptually, just freeze)
   for (const inm of J.inmates) {
@@ -170,8 +209,61 @@ function jailUpdate(dt) {
   playerCheckJailPrompt();
 }
 
+function jailEscapeUpdate(dt) {
+  const J = State.jail;
+  const p = State.player;
+  const inYard = J.current && J.current.room === 'yard' && !J.locked;
+  const nearSpot = inYard && dist(p.x, p.y, JailLayout.escapeSpot.x, JailLayout.escapeSpot.y) < 45;
+  const holdingE = !!(State.keys['e'] || State.keys['E']);
+
+  if (nearSpot && holdingE) {
+    J.escapeT += dt;
+    const guardNear = J.guards.some((g) => dist(g.x, g.y, p.x, p.y) < 140);
+    if (guardNear) {
+      J.escapeT = 0;
+      if (typeof sfxCaughtEscaping === 'function') sfxCaughtEscaping();
+      setSubtitle('교도관', 2.6, '"거기 뭐 하는 거야!!" 탈옥 시도가 발각되었습니다. 형기가 3일 추가됩니다.');
+      J.sentenceDays += 3;
+      J.locked = true;
+      p.x = JailLayout.cell.x + JailLayout.cell.w / 2;
+      p.y = JailLayout.cell.y + JailLayout.cell.h / 2;
+    } else if (J.escapeT >= 3.0) {
+      jailbreakSuccess();
+    }
+  } else if (!nearSpot) {
+    J.escapeT = 0;
+  }
+}
+
+function jailbreakSuccess() {
+  if (typeof sfxEscape === 'function') sfxEscape();
+  setSubtitle('나레이션', 3.2, '철조망을 넘었다! 하지만 곧 온 도시에 수배령이 내려질 것이다...');
+  State.stats.escaped = (State.stats.escaped || 0) + 1;
+  State.jail = null;
+  State.player.controlLocked = false;
+  State.player.inv = { knife: false, gun: false };
+  State.player.weapon = 'fists';
+  State.mode = 'city';
+  const hq = World.policeHQ.doorRect;
+  State.player.x = hq.x + hq.w / 2;
+  State.player.y = hq.y + hq.h + 50;
+  updateCamera(false);
+  State.wanted = 5;
+  State.wantedSightTimer = 12;
+  policeTrySpawn();
+}
+
 function playerCheckJailPrompt() {
-  State.prompt = State.jail.locked ? '취침 시간입니다 (자유 이동 불가)' : '';
+  const J = State.jail;
+  if (J.locked) { State.prompt = '취침 시간입니다 (자유 이동 불가)'; return; }
+  const inYard = J.current && J.current.room === 'yard';
+  if (inYard && dist(State.player.x, State.player.y, JailLayout.escapeSpot.x, JailLayout.escapeSpot.y) < 45) {
+    State.prompt = J.escapeT > 0
+      ? '탈옥 시도 중... ' + J.escapeT.toFixed(1) + ' / 3.0초 (E 유지, 경비 접근 시 발각)'
+      : 'E를 누르고 있으면 철조망을 넘습니다 (경비를 조심하세요)';
+    return;
+  }
+  State.prompt = '';
 }
 
 function jailRelease() {
@@ -308,4 +400,16 @@ function drawYard(ctx, r) {
     const fx = r.x + (i * r.w) / 9;
     ctx.beginPath(); ctx.moveTo(fx, r.y); ctx.lineTo(fx, r.y - 14); ctx.stroke();
   }
+
+  // weak fence spot (jailbreak point)
+  const es = JailLayout.escapeSpot;
+  ctx.strokeStyle = 'rgba(255,90,90,0.8)';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.arc(es.x, es.y, 24, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(255,90,90,0.9)';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('약해진 철조망', es.x, es.y + 38);
 }

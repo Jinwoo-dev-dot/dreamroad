@@ -16,14 +16,18 @@ const TrialLayout = {
   gallery: { x: 90, y: 360, w: 520, h: 90 },
 };
 
-function computeSentence(kills, thefts) {
-  if (kills >= 4) return { death: true, kills, thefts };
+function computeSentence(kills, thefts, copKills, escaped) {
+  copKills = copKills || 0;
+  escaped = escaped || 0;
+  if (kills >= 4 || copKills >= 1 || escaped >= 1) {
+    return { death: true, kills, thefts, copKills, escaped };
+  }
   let days;
   if (kills === 0) days = clamp(2 + thefts, 2, 6);
   else if (kills === 1) days = 6;
   else if (kills === 2) days = 9;
   else days = 13; // kills === 3
-  return { death: false, days, kills, thefts };
+  return { death: false, days, kills, thefts, copKills, escaped };
 }
 
 const TRIAL_PHASES = {
@@ -39,7 +43,7 @@ function trialInit(stats) {
   State.mode = 'trial';
   State.trial = {
     phase: 'enter', t: 0,
-    kills: stats.kills, thefts: stats.thefts,
+    kills: stats.kills, thefts: stats.thefts, copKills: stats.copKills || 0, escaped: stats.escaped || 0,
     sentence: null,
     judge: { kind: 'npc', x: TrialLayout.judgeSpot.x, y: TrialLayout.judgeSpot.y, radius: 13, facing: Math.PI / 2, animTimer: 0, speed: 0 },
     prosecutor: { kind: 'npc', x: TrialLayout.prosecutorSpot.x, y: TrialLayout.prosecutorSpot.y, radius: 13, facing: Math.PI / 2, animTimer: 0, speed: 0 },
@@ -64,8 +68,7 @@ function trialUpdate(dt) {
     case 'enter':
       if (T.t >= TRIAL_PHASES.enter) {
         T.phase = 'charge'; T.t = 0;
-        const msg = '검사: 피고인은 총 ' + T.kills + '명을 살해하고 ' + T.thefts + '회의 절도를 저질렀습니다. 엄중한 처벌을 요청합니다.';
-        setSubtitle('검사', TRIAL_PHASES.charge, T.kills > 0 ? msg : '검사: 피고인은 ' + T.thefts + '회의 절도 혐의를 받고 있습니다.');
+        setSubtitle('검사', TRIAL_PHASES.charge, buildChargeText(T));
       }
       break;
     case 'charge':
@@ -83,10 +86,10 @@ function trialUpdate(dt) {
     case 'deliberate':
       if (T.t >= TRIAL_PHASES.deliberate) {
         T.phase = 'verdict'; T.t = 0;
-        T.sentence = computeSentence(T.kills, T.thefts);
+        T.sentence = computeSentence(T.kills, T.thefts, T.copKills, T.escaped);
         if (typeof sfxGavel === 'function') sfxGavel();
         if (T.sentence.death) {
-          setSubtitle('판사', TRIAL_PHASES.verdict, '판사: "탕! 탕! 탕! — 피고인을 살인죄로 사형에 처한다."');
+          setSubtitle('판사', TRIAL_PHASES.verdict, '판사: "탕! 탕! 탕! — 피고인을 사형에 처한다. 형은 3일 뒤 집행한다."');
           if (typeof sfxToll === 'function') sfxToll();
         } else {
           setSubtitle('판사', TRIAL_PHASES.verdict, '판사: "탕! 탕! — 피고인에게 징역 ' + T.sentence.days + '일을 선고한다."');
@@ -102,27 +105,30 @@ function trialUpdate(dt) {
   }
 }
 
+function buildChargeText(T) {
+  const parts = [];
+  if (T.copKills > 0) parts.push('경찰관 살해 ' + T.copKills + '건');
+  if (T.kills > 0) parts.push('일반인 살해 ' + T.kills + '명');
+  if (T.thefts > 0) parts.push('절도 ' + T.thefts + '회');
+  if (T.escaped > 0) parts.push('탈옥 ' + T.escaped + '회');
+  if (parts.length === 0) return '검사: 뚜렷한 증거는 없으나 정황상 기소합니다.';
+  return '검사: 피고인은 ' + parts.join(', ') + '의 혐의를 받고 있습니다. 엄중한 처벌을 요청합니다.';
+}
+
 function trialFinish() {
   const sentence = State.trial.sentence;
   State.trial = null;
   State.stats.kills = 0;
   State.stats.thefts = 0;
+  State.stats.copKills = 0;
+  State.stats.escaped = 0;
+  State.player.controlLocked = false;
   if (sentence.death) {
-    deathEnding(sentence);
+    jailInit(3, true);
   } else {
-    State.player.controlLocked = false;
-    jailInit(sentence.days);
-    State.mode = 'jail';
+    jailInit(sentence.days, false);
   }
-}
-
-function deathEnding(sentence) {
-  State.mode = 'ending';
-  const summaryEl = document.getElementById('end-summary');
-  if (summaryEl) {
-    summaryEl.textContent = '살해 ' + sentence.kills + '명 · 절도 ' + sentence.thefts + '회의 죄로 사형이 집행되었습니다.';
-  }
-  showEndScreen(true);
+  State.mode = 'jail';
 }
 
 function trialDraw(ctx) {

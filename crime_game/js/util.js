@@ -29,8 +29,10 @@ const State = {
   arrest: null,
   trial: null,
   jail: null,
+  execution: null,
+  dealer: null,
   day: 1,
-  stats: { kills: 0, thefts: 0, cash: 0 },
+  stats: { kills: 0, thefts: 0, cash: 0, copKills: 0, escaped: 0 },
 };
 
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }

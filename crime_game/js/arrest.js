@@ -15,7 +15,7 @@ function addWanted(n, reason) {
 
 function policeTrySpawn() {
   if (State.mode !== 'city' || State.arrest) return;
-  const active = State.police.filter(p => !p.dead).length;
+  const active = State.police.filter(p => !p.dead && p.state !== 'dead').length;
   const desired = State.wanted;
   for (let i = active; i < desired; i++) {
     policeSpawnNear(State.player.x, State.player.y);
@@ -39,7 +39,7 @@ function wantedUpdate(dt) {
     }
   }
   policeTrySpawn();
-  State.police = State.police.filter(p => !p.dead);
+  State.police = State.police.filter(p => !p.dead && !p.removeMe);
 }
 
 const ARREST_PHASES = {
@@ -157,7 +157,7 @@ function finishArrestIntoTrial() {
   State.bullets = [];
   State.player.state = 'idle';
   State.player.weapon = 'fists';
-  trialInit({ kills: State.stats.kills, thefts: State.stats.thefts });
+  trialInit({ kills: State.stats.kills, thefts: State.stats.thefts, copKills: State.stats.copKills, escaped: State.stats.escaped });
 }
 
 function getCameraTarget() {
