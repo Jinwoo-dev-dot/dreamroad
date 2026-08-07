@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DREAM ROAD: 크라임 시티</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="controls-hint">
+    마우스: 이동/조준&nbsp;·&nbsp;클릭: 공격&nbsp;·&nbsp;1/2/3: 무기 교체&nbsp;·&nbsp;4: 변장&nbsp;·&nbsp;E: 상호작용(문/훔치기/인질/탑승/줍기)
+  </div>
+
+  <div id="title-screen">
+    <div class="title-box">
+      <h1>DREAM ROAD</h1>
+      <h2>크라임 시티</h2>
+      <p class="lede">
+        평범한 하루로 시작해, 스스로의 선택이 만드는 결과까지 —<br />
+        도시를 누비고, 붙잡히고, 대가를 치른다.
+      </p>
+      <button id="start-btn">시작하기</button>
+      <div class="howto">
+        <p><b>조작법</b></p>
+        <p>마우스를 움직이면 캐릭터가 커서를 따라 걷거나 뜁니다.</p>
+        <p>집 안에서 칼과 총을 챙긴 뒤, 숫자키 1/2/3 으로 무기를 바꾸세요.</p>
+        <p>마우스 클릭으로 공격, E 키로 문 열기·훔치기·줍기 등을 상호작용합니다.</p>
+        <p>범죄를 저지르면 경찰이 출동합니다 — 붙잡히면 수갑을 차고 재판을 거쳐 형이 확정됩니다.</p>
+        <p>4명 이상 살해, 경찰관 살해, 탈옥 전력이 있으면 사형(3일 뒤 집행) — 그 미만은 징역형입니다.</p>
+        <p>총알은 한정되어 있습니다. 공원의 밀거래상에게 훔친 돈으로 탄약을 구매할 수 있습니다.</p>
+        <p>교도소 운동 시간에 몰래 E를 눌러 철조망을 넘는 탈옥을 시도할 수 있습니다 (경비에게 들키면 형기 추가).</p>
+        <p>형기를 마치면 출소해 다시 집으로 — 단, 무기와 소지품은 모두 압수됩니다.</p>
+        <p><b>그 외 할 수 있는 것들</b></p>
+        <p>E로 주차된 차를 훔쳐 몰 수 있습니다. 사람을 치거나 경찰차로 들이받아 넘어뜨릴 수 있습니다.</p>
+        <p>E로 시민을 인질로 붙잡으면 경찰이 접근을 주저합니다. 풀어주거나, 공격해 해칠 수도 있습니다.</p>
+        <p>범죄 직후 도망치는 목격자에게 다가가 E를 누르면 돈으로 매수하거나 위협해 신고를 막을 수 있습니다.</p>
+        <p>체포당해 "손들어" 상태일 때 E를 누르면 돈으로 매수를 시도할 수 있습니다 (실패하면 형이 더 무거워집니다).</p>
+        <p>수배도가 높아지면 경찰이 총으로 반격합니다 — 체력이 다하면 사살당하는 대신 제압되어 체포됩니다.</p>
+        <p>사살한 경찰은 탄약을 떨어뜨립니다. E로 주울 수 있습니다.</p>
+        <p>교도소 작업 시간에 작업대 근처에서 E를 누르고 있으면 돈을 벌 수 있습니다 (출소 시 지급).</p>
+        <p>장기 복역수는 절반쯤 지나면 가석방 심사를 받습니다 — 모범수일수록 감형 확률이 높습니다.</p>
+        <p>교도소에서 재소자에게 E를 누르면 시비를 겁니다 — 이기면 평판이 오르지만, 경비에게 들키면 형기가 늘어납니다.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="end-screen">
+    <div class="title-box">
+      <h1 class="end-title">사형 집행</h1>
+      <p class="lede" id="end-summary"></p>
+      <button id="restart-btn">다시 시작</button>
+    </div>
+  </div>
+
+  <button id="skip-jail-btn" title="복역 시간을 건너뜁니다. 사형수는 건너뛰어도 집행은 그대로 진행됩니다.">
+    ⏭ 감옥 스킵
+  </button>
+
+  <script src="js/util.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/entities.js"></script>
+  <script src="js/vehicles.js"></script>
+  <script src="js/interiors.js"></script>
+  <script src="js/arrest.js"></script>
+  <script src="js/trial.js"></script>
+  <script src="js/jail.js"></script>
+  <script src="js/execution.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
