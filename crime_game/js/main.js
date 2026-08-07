@@ -8,6 +8,7 @@ function computeCameraBounds() {
     case 'home': return { w: HomeInterior.w, h: HomeInterior.h };
     case 'store': return { w: StoreInterior.w, h: StoreInterior.h };
     case 'jail': return { w: JailLayout.w, h: JailLayout.h };
+    case 'trial': return { w: TrialLayout.w, h: TrialLayout.h };
     default: return { w: World.width, h: World.height };
   }
 }
@@ -45,10 +46,12 @@ function update(dt) {
   else if (State.mode === 'arrest') {
     arrestUpdate(dt);
     for (const npc of State.npcs) npcUpdate(npc, dt);
-  } else if (State.mode === 'jail') jailUpdate(dt);
+  } else if (State.mode === 'trial') trialUpdate(dt);
+  else if (State.mode === 'jail') jailUpdate(dt);
+  else return; // title / ending: no world simulation
 
-  if (State.mode !== 'title') particlesUpdate(dt);
-  updateCamera(State.mode !== 'title');
+  particlesUpdate(dt);
+  updateCamera(true);
 }
 
 function drawCityScene(ctx) {
@@ -68,7 +71,7 @@ function render() {
   ctx.fillStyle = '#111417';
   ctx.fillRect(0, 0, State.w, State.h);
 
-  if (State.mode === 'title') { return; }
+  if (State.mode === 'title' || State.mode === 'ending') { return; }
 
   ctx.save();
   ctx.translate(-Math.round(State.camera.x), -Math.round(State.camera.y));
@@ -76,6 +79,7 @@ function render() {
   if (State.mode === 'city' || State.mode === 'arrest') drawCityScene(ctx);
   else if (State.mode === 'home') drawHome(ctx);
   else if (State.mode === 'store') drawStore(ctx);
+  else if (State.mode === 'trial') trialDraw(ctx);
   else if (State.mode === 'jail') jailDraw(ctx);
 
   ctx.restore();
@@ -99,6 +103,7 @@ function resizeCanvas() {
 }
 
 function startGame() {
+  initAudio();
   worldGenerate();
   npcSpawnAll(45);
   State.player = createPlayer();
@@ -110,9 +115,14 @@ function startGame() {
   State.particles = [];
   State.decals = [];
   State.homeTaken = { knife: false, gun: false };
+  State.stats = { kills: 0, thefts: 0, cash: 0 };
+  State.arrest = null;
+  State.trial = null;
+  State.jail = null;
   enterHome();
   updateCamera(false);
   showTitleScreen(false);
+  showEndScreen(false);
   setSubtitle('', 0);
   setTimeout(() => setSubtitle('나레이션', 3.5, '평범한 하루... 소지품에서 낯익은 물건들이 눈에 띈다.'), 300);
 }
@@ -147,6 +157,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
   const btn = document.getElementById('start-btn');
   if (btn) btn.addEventListener('click', startGame);
+  const restartBtn = document.getElementById('restart-btn');
+  if (restartBtn) restartBtn.addEventListener('click', startGame);
 
   requestAnimationFrame(loop);
 });

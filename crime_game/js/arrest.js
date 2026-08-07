@@ -8,7 +8,7 @@ function addWanted(n, reason) {
   State.wanted = clamp(State.wanted + n, 0, 5);
   State.wantedSightTimer = 8;
   if (State.wanted > prev) {
-    setSubtitle('', 0);
+    if (prev === 0) setSubtitle('긴급 신고', 2.5, (reason || '범죄') + ' 신고 접수! 경찰이 출동합니다.');
     policeTrySpawn();
   }
 }
@@ -23,7 +23,11 @@ function policeTrySpawn() {
 }
 
 function wantedUpdate(dt) {
-  if (State.wanted <= 0) return;
+  if (State.wanted <= 0) {
+    if (typeof sirenStop === 'function') sirenStop();
+    return;
+  }
+  if (typeof sirenStart === 'function') sirenStart();
   const near = State.police.some(p => !p.dead && p.state === 'chase' && dist(p.x, p.y, State.player.x, State.player.y) < 520);
   if (near) {
     State.wantedSightTimer = 8;
@@ -55,6 +59,7 @@ function startArrest(officer) {
   State.player.controlLocked = true;
   State.player.vx = 0; State.player.vy = 0;
   State.player.facing = angleTo(State.player.x, State.player.y, officer.x, officer.y) + Math.PI;
+  if (typeof sirenStop === 'function') sirenStop();
   setSubtitle('경찰', 1.0, '거기 서! 손들어! 움직이지 마!');
 }
 
@@ -84,8 +89,10 @@ function arrestUpdate(dt) {
         officer.x = lerp(officer.x, p.x + Math.cos(behind) * 26, dt * 3);
         officer.y = lerp(officer.y, p.y + Math.sin(behind) * 26, dt * 3);
       }
-      if (Math.abs(A.t - ARREST_PHASES.cuff * 0.82) < 0.03) {
+      if (!A.cuffSoundPlayed && A.t >= ARREST_PHASES.cuff * 0.82) {
+        A.cuffSoundPlayed = true;
         spawnParticle({ type: 'spark', x: p.x, y: p.y, vx: 0, vy: -10, life: 0.4, maxLife: 0.4, size: 5 });
+        if (typeof sfxCuff === 'function') sfxCuff();
       }
       if (A.t >= ARREST_PHASES.cuff) {
         A.phase = 'escort'; A.t = 0;
@@ -136,23 +143,21 @@ function arrestUpdate(dt) {
     }
     case 'fade':
       if (A.t >= ARREST_PHASES.fade) {
-        finishArrestIntoJail();
+        finishArrestIntoTrial();
       }
       break;
   }
 }
 
-function finishArrestIntoJail() {
+function finishArrestIntoTrial() {
   State.arrest = null;
   State.wanted = 0;
   State.police = [];
   State.cars = [];
   State.bullets = [];
-  State.player.controlLocked = false;
   State.player.state = 'idle';
   State.player.weapon = 'fists';
-  jailInit();
-  State.mode = 'jail';
+  trialInit({ kills: State.stats.kills, thefts: State.stats.thefts });
 }
 
 function getCameraTarget() {

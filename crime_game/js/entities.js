@@ -100,6 +100,7 @@ function triggerPlayerAttack() {
     const by = p.y + Math.sin(p.facing) * 22;
     spawnParticle({ type: 'muzzle', x: bx, y: by, vx: 0, vy: 0, life: 0.08, maxLife: 0.08, size: 16 });
     State.bullets.push({ x: bx, y: by, vx: Math.cos(p.facing) * 900, vy: Math.sin(p.facing) * 900, life: 0.7, owner: 'player' });
+    if (typeof sfxGunshot === 'function') sfxGunshot();
   }
   p.atkTimer = 0;
   p.atkApplied = false;
@@ -107,6 +108,7 @@ function triggerPlayerAttack() {
 
 function applyAttack(p) {
   if (p.weapon === 'knife') {
+    if (typeof sfxKnife === 'function') sfxKnife();
     const range = 50;
     const cone = Math.PI / 2.2;
     let target = null, bestD = range;
@@ -167,6 +169,7 @@ function killNpc(npc) {
   npc.fallDir = npc.facing + rand(-0.4, 0.4);
   npc.decalDone = false;
   spawnBloodBurst(npc.x, npc.y, 12);
+  State.stats.kills += 1;
   addWanted(3, '폭행/살인');
   for (const o of State.npcs) {
     if (o !== npc && o.state !== 'dead' && dist(o.x, o.y, npc.x, npc.y) < 260) {

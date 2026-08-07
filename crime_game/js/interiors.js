@@ -34,6 +34,7 @@ function enterHome() {
   State.player.x = HomeInterior.entryPoint.x;
   State.player.y = HomeInterior.entryPoint.y;
   State.player.controlLocked = false;
+  if (typeof sirenStop === 'function') sirenStop();
 }
 
 function exitHomeToCity() {
@@ -48,7 +49,8 @@ function enterStore(storeId) {
   State.storeId = storeId;
   State.player.x = StoreInterior.entryPoint.x;
   State.player.y = StoreInterior.entryPoint.y;
-  if (!State._clerk) State._clerk = { kind: 'npc', x: 210, y: 220, facing: -Math.PI / 2, animTimer: 0, speed: 0, state: 'wander', alert: 0 };
+  if (!State._clerk) State._clerk = { kind: 'npc', x: 210, y: 220, radius: 12, facing: -Math.PI / 2, animTimer: 0, speed: 0, state: 'wander', alert: 0 };
+  if (typeof sirenStop === 'function') sirenStop();
 }
 
 function exitStoreToCity() {
@@ -97,7 +99,14 @@ function tryInteract() {
 
 function stealItem(store, shelf) {
   store.stolen[shelf.item] = (store.stolen[shelf.item] || 0) + 1;
-  setSubtitle('"' + shelf.item + '"을(를) 훔쳤다!', 1.2);
+  State.stats.thefts += 1;
+  if (shelf.item === '현금') {
+    const amount = randInt(20, 80);
+    State.stats.cash += amount;
+    setSubtitle('현금 ' + amount + '원을 훔쳤다!', 1.2);
+  } else {
+    setSubtitle('"' + shelf.item + '"을(를) 훔쳤다!', 1.2);
+  }
   spawnParticle({ type: 'spark', x: State.player.x, y: State.player.y - 20, vx: 0, vy: -20, life: 0.5, maxLife: 0.5, size: 4 });
   const clerk = State._clerk;
   const d = dist(State.player.x, State.player.y, clerk.x, clerk.y);
@@ -105,6 +114,7 @@ function stealItem(store, shelf) {
   if (clerk.alert >= 100) {
     clerk.alert = 100;
     addWanted(2, '절도');
+    if (typeof sfxAlarm === 'function') sfxAlarm();
     setSubtitle('점원: "도둑이야!! 신고했어요!"', 2.2, '경찰이 출동합니다');
   }
 }

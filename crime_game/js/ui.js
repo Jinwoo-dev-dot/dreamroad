@@ -9,6 +9,7 @@ function uiDraw(ctx) {
 
   if (State.mode === 'city' || State.mode === 'arrest') {
     drawWantedStars(ctx);
+    drawCriminalRecord(ctx);
     drawWeaponBar(ctx);
     drawMinimap(ctx);
   } else if (State.mode === 'home' || State.mode === 'store') {
@@ -41,6 +42,16 @@ function drawWantedStars(ctx) {
   for (let i = 0; i < 5; i++) s += i < State.wanted ? '★' : '☆';
   ctx.fillStyle = State.wanted > 0 ? '#ffd23f' : '#777';
   ctx.fillText(s, 22, 44);
+}
+
+function drawCriminalRecord(ctx) {
+  const s = State.stats;
+  ctx.font = '13px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(14, 58, 190, 28);
+  ctx.fillStyle = s.kills >= 4 ? '#ff5a5a' : '#dcdcdc';
+  ctx.fillText('🔪 살해 ' + s.kills + '  🛒 절도 ' + s.thefts + '  💰 ' + s.cash, 22, 77);
 }
 
 function drawWeaponBar(ctx) {
@@ -134,18 +145,33 @@ function drawModeLabel(ctx) {
 function drawJailHud(ctx) {
   const J = State.jail;
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.fillRect(State.w / 2 - 160, 14, 320, 54);
+  ctx.fillRect(State.w / 2 - 170, 14, 340, 54);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 20px sans-serif';
   ctx.fillText(fmtClock(J.minutes), State.w / 2, 38);
   ctx.font = '13px sans-serif';
   ctx.fillStyle = '#ffd23f';
-  ctx.fillText('복역 ' + State.day + '일째 · ' + (J.current ? J.current.label : ''), State.w / 2, 58);
+  const remain = Math.max(0, J.sentenceDays - J.servedDays);
+  ctx.fillText('복역 ' + (J.servedDays + 1) + '/' + J.sentenceDays + '일째 · 남은 형기 ' + remain + '일 · ' + (J.current ? J.current.label : ''), State.w / 2, 58);
+
+  if (J.releasing) {
+    const t = clamp(J.releaseT / 2.6, 0, 1);
+    ctx.fillStyle = 'rgba(0,0,0,' + (t < 0.7 ? t * 0.4 : lerp(0.28, 1, (t - 0.7) / 0.3)) + ')';
+    ctx.fillRect(0, 0, State.w, State.h);
+    ctx.font = 'bold 26px sans-serif';
+    ctx.fillStyle = '#8affb0';
+    ctx.fillText('출소', State.w / 2, State.h / 2);
+  }
 }
 
-// ---------- Title screen (DOM) ----------
+// ---------- Title / end screens (DOM) ----------
 function showTitleScreen(show) {
   const el = document.getElementById('title-screen');
+  if (el) el.style.display = show ? 'flex' : 'none';
+}
+
+function showEndScreen(show) {
+  const el = document.getElementById('end-screen');
   if (el) el.style.display = show ? 'flex' : 'none';
 }

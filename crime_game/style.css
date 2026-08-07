@@ -41,6 +41,21 @@ html, body {
   z-index: 10;
 }
 
+#end-screen {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, #3a1414 0%, #0a0505 100%);
+  z-index: 10;
+}
+
+.end-title {
+  color: #ff5a5a !important;
+  text-shadow: 0 0 18px rgba(255, 90, 90, 0.45) !important;
+}
+
 .title-box {
   text-align: center;
   color: #eee;

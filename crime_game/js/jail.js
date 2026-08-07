@@ -35,7 +35,7 @@ function jailFindEvent(minuteOfDay) {
   return ev;
 }
 
-function jailInit() {
+function jailInit(sentenceDays) {
   State.jail = {
     minutes: 1090, // arrive in the evening (자유 시간)
     lastEventTime: -1,
@@ -44,6 +44,10 @@ function jailInit() {
     guards: [],
     inmates: [],
     processed: false,
+    sentenceDays: sentenceDays || 1,
+    servedDays: 0,
+    releasing: false,
+    releaseT: 0,
   };
   State.player.x = JailLayout.cell.x + JailLayout.cell.w / 2;
   State.player.y = JailLayout.cell.y + JailLayout.cell.h / 2;
@@ -51,13 +55,13 @@ function jailInit() {
   State.player.weapon = 'fists';
 
   State.jail.guards = [
-    { x: 60, y: 180, dir: 1, animTimer: 0, speed: 0, facing: 0, kind: 'guard' },
-    { x: 700, y: 180, dir: -1, animTimer: rand(0, 5), speed: 0, facing: Math.PI, kind: 'guard' },
+    { x: 60, y: 180, dir: 1, radius: 13, animTimer: 0, speed: 0, facing: 0, kind: 'guard' },
+    { x: 700, y: 180, dir: -1, radius: 13, animTimer: rand(0, 5), speed: 0, facing: Math.PI, kind: 'guard' },
   ];
   State.jail.inmates = [];
   for (let i = 0; i < 6; i++) {
     State.jail.inmates.push({
-      kind: 'inmate', x: rand(700, 880), y: rand(260, 560),
+      kind: 'inmate', x: rand(700, 880), y: rand(260, 560), radius: 12,
       target: { x: rand(650, 900), y: rand(240, 580) },
       pauseTimer: rand(0.5, 2), facing: 0, animTimer: rand(0, 5), speed: 0,
       color: '#e8791f',
@@ -76,12 +80,29 @@ function jailBounds() {
 
 function jailUpdate(dt) {
   const J = State.jail;
-  const RATE = 10; // in-game minutes per real second
+
+  if (J.releasing) {
+    J.releaseT += dt;
+    State.player.controlLocked = true;
+    if (J.releaseT >= 2.6) jailRelease();
+    return;
+  }
+
+  const RATE = 45; // in-game minutes per real second (1 day ~= 32s)
   J.minutes += dt * RATE;
   if (J.minutes >= 1440) {
     J.minutes -= 1440;
     State.day += 1;
-    setSubtitle('교도소', 2.5, State.day + '일째 아침이 밝았습니다.');
+    J.servedDays += 1;
+    if (J.servedDays >= J.sentenceDays) {
+      J.releasing = true;
+      J.releaseT = 0;
+      State.player.controlLocked = true;
+      setSubtitle('교도관', 3, '형기를 마쳤습니다. 출소 절차를 진행합니다.');
+      if (typeof sfxRelease === 'function') sfxRelease();
+      return;
+    }
+    setSubtitle('교도소', 2.5, State.day + '일째 아침이 밝았습니다. (남은 형기 ' + (J.sentenceDays - J.servedDays) + '일)');
   }
 
   const ev = jailFindEvent(Math.floor(J.minutes));
@@ -89,6 +110,7 @@ function jailUpdate(dt) {
     J.lastEventTime = ev.time;
     J.current = ev;
     setSubtitle('교도관 방송', 3, '[' + ev.label + '] ' + ev.sub);
+    if (typeof sfxBuzzer === 'function') sfxBuzzer();
     if (ev.lock) {
       J.locked = true;
       State.player.x = JailLayout.cell.x + JailLayout.cell.w / 2;
@@ -150,6 +172,23 @@ function jailUpdate(dt) {
 
 function playerCheckJailPrompt() {
   State.prompt = State.jail.locked ? '취침 시간입니다 (자유 이동 불가)' : '';
+}
+
+function jailRelease() {
+  State.stats.kills = 0;
+  State.stats.thefts = 0;
+  State.wanted = 0;
+  State.police = [];
+  State.cars = [];
+  State.bullets = [];
+  State.player.controlLocked = false;
+  State.player.inv = { knife: false, gun: false };
+  State.player.weapon = 'fists';
+  State.homeTaken = { knife: false, gun: false };
+  State.jail = null;
+  enterHome();
+  updateCamera(false);
+  setSubtitle('나레이션', 3.5, '자유의 몸이 되었다. 하지만 손에는 아무것도 남지 않았다...');
 }
 
 function jailDraw(ctx) {

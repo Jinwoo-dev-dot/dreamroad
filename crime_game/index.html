@@ -27,16 +27,28 @@
         <p>마우스를 움직이면 캐릭터가 커서를 따라 걷거나 뜁니다.</p>
         <p>집 안에서 칼과 총을 챙긴 뒤, 숫자키 1/2/3 으로 무기를 바꾸세요.</p>
         <p>마우스 클릭으로 공격, E 키로 문 열기·훔치기·줍기 등을 상호작용합니다.</p>
-        <p>범죄를 저지르면 경찰이 출동합니다 — 붙잡히면 수갑을 차고 경찰서를 거쳐 교도소로 이송됩니다.</p>
+        <p>범죄를 저지르면 경찰이 출동합니다 — 붙잡히면 수갑을 차고 재판을 거쳐 형이 확정됩니다.</p>
+        <p>4명 이상을 살해하면 사형, 그 미만이면 살해·절도 횟수에 따라 징역형이 정해집니다.</p>
+        <p>형기를 마치면 출소해 다시 집으로 — 단, 무기와 소지품은 모두 압수됩니다.</p>
       </div>
     </div>
   </div>
 
+  <div id="end-screen">
+    <div class="title-box">
+      <h1 class="end-title">사형 집행</h1>
+      <p class="lede" id="end-summary"></p>
+      <button id="restart-btn">다시 시작</button>
+    </div>
+  </div>
+
   <script src="js/util.js"></script>
+  <script src="js/audio.js"></script>
   <script src="js/world.js"></script>
   <script src="js/entities.js"></script>
   <script src="js/interiors.js"></script>
   <script src="js/arrest.js"></script>
+  <script src="js/trial.js"></script>
   <script src="js/jail.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/main.js"></script>
