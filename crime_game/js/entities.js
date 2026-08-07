@@ -19,11 +19,18 @@ function createPlayer() {
     weapon: 'fists', // fists/knife/gun
     inv: { knife: false, gun: false },
     ammo: 0,
+    disguises: 0,
     atkCooldown: 0,
     atkTimer: 0,
     atkApplied: false,
     controlLocked: false,
     recoil: 0,
+    hp: 100,
+    noDamageT: 99,
+    subdued: false,
+    subduedT: 0,
+    hostage: null,
+    inVehicle: null,
   };
 }
 
@@ -140,9 +147,29 @@ function applyAttack(p) {
 function playerCheckInteractionPrompt() {
   State.prompt = '';
   if (State.mode === 'city') {
-    const near = worldNearestDoor(State.player.x, State.player.y, 55);
+    const p = State.player;
+    if (p.inVehicle) { State.prompt = 'E : 하차'; return; }
+    if (p.hostage) { State.prompt = 'E : 인질 풀어주기'; return; }
+    const pickup = State.pickups.find(pu => dist(p.x, p.y, pu.x, pu.y) < 40);
+    if (pickup) { State.prompt = 'E : 탄약 줍기 (' + pickup.amount + '발)'; return; }
+    if (State.dealer && dist(p.x, p.y, State.dealer.x, State.dealer.y) < 55) {
+      State.prompt = p.inv.gun ? 'E : 탄약 구매 (💰50 → 총알 6발)' : 'E : 말 걸기';
+      return;
+    }
+    const witness = State.npcs.find(n => n.state === 'flee' && n.willReport && dist(p.x, p.y, n.x, n.y) < 50);
+    if (witness) {
+      State.prompt = State.stats.cash >= 30 ? 'E : 목격자 매수/위협 (💰30)' : 'E : 목격자 위협 (성공률 50%)';
+      return;
+    }
+    const car = State.cars.find(c => c.kind === 'civilian' && dist(p.x, p.y, c.x, c.y) < 45);
+    if (car) { State.prompt = 'E : 차 훔치기'; return; }
+    const grabTarget = State.npcs.find(n => (n.state === 'wander' || n.state === 'flee') && dist(p.x, p.y, n.x, n.y) < 42);
+    if (grabTarget) { State.prompt = 'E : 인질로 붙잡기'; return; }
+    const near = worldNearestDoor(p.x, p.y, 55);
     if (near) State.prompt = 'E : 들어가기';
-  } else if (State.mode === 'home') {
+    return;
+  }
+  if (State.mode === 'home') {
     if (!State.homeTaken.knife && dist(State.player.x, State.player.y, HomeInterior.knifeSpot.x, HomeInterior.knifeSpot.y) < 40) {
       State.prompt = 'E : 칼 챙기기';
     } else if (!State.homeTaken.gun && dist(State.player.x, State.player.y, HomeInterior.gunSpot.x, HomeInterior.gunSpot.y) < 40) {
@@ -163,14 +190,6 @@ function playerCheckInteractionPrompt() {
       }
     }
   }
-  if (State.mode === 'city' && State.dealer) {
-    const d = dist(State.player.x, State.player.y, State.dealer.x, State.dealer.y);
-    if (d < 55) {
-      State.prompt = State.player.inv.gun
-        ? 'E : 탄약 구매 (💰50 → 총알 6발)'
-        : 'E : 말 걸기';
-    }
-  }
 }
 
 // ---------- Combat resolution ----------
@@ -181,18 +200,25 @@ function combatHit(target, weapon) {
 
 function killNpc(npc) {
   if (npc.state === 'dead') return;
+  const wasHostage = State.player.hostage === npc;
   npc.state = 'dead';
   npc.deathT = 0;
   npc.fallDir = npc.facing + rand(-0.4, 0.4);
   npc.decalDone = false;
   spawnBloodBurst(npc.x, npc.y, 12);
   State.stats.kills += 1;
-  addWanted(3, '폭행/살인');
+  if (wasHostage) {
+    State.player.hostage = null;
+    addWanted(5, '인질 살해');
+  } else {
+    addWanted(3, '폭행/살인');
+  }
   for (const o of State.npcs) {
-    if (o !== npc && o.state !== 'dead' && dist(o.x, o.y, npc.x, npc.y) < 260) {
+    if (o !== npc && o.state !== 'dead' && o.state !== 'hostage' && dist(o.x, o.y, npc.x, npc.y) < 260) {
       o.state = 'flee';
       o.fleeFrom = { x: npc.x, y: npc.y };
       o.fleeTimer = rand(2.5, 4.5);
+      o.willReport = true;
     }
   }
 }
@@ -209,6 +235,72 @@ function killPolice(officer) {
   for (const p of State.police) if (p !== officer && p.state !== 'dead') p.state = 'chase';
   policeSpawnNear(officer.x, officer.y);
   policeSpawnNear(officer.x, officer.y);
+  State.pickups.push({ x: officer.x, y: officer.y, type: 'ammo', amount: randInt(3, 6) });
+}
+
+// ---------- Hostage / witness / loot ----------
+function releaseHostage() {
+  const p = State.player;
+  if (!p.hostage) return false;
+  const h = p.hostage;
+  p.hostage = null;
+  h.state = 'flee';
+  h.fleeFrom = { x: p.x, y: p.y };
+  h.fleeTimer = rand(2, 3);
+  h.willReport = false;
+  State.wanted = clamp(State.wanted - 1, 0, 5);
+  setSubtitle('', 1.6, '인질을 풀어줬다.');
+  return true;
+}
+
+function grabHostage() {
+  const p = State.player;
+  const target = State.npcs.find((n) => (n.state === 'wander' || n.state === 'flee') && dist(p.x, p.y, n.x, n.y) < 42);
+  if (!target) return false;
+  p.hostage = target;
+  target.state = 'hostage';
+  addWanted(2, '인질극');
+  setSubtitle('', 1.6, '시민을 인질로 붙잡았다!');
+  return true;
+}
+
+function trySilenceWitness() {
+  const p = State.player;
+  const target = State.npcs.find((n) => n.state === 'flee' && n.willReport && dist(p.x, p.y, n.x, n.y) < 50);
+  if (!target) return false;
+  if (State.stats.cash >= 30) {
+    State.stats.cash -= 30;
+    target.willReport = false;
+    setSubtitle('', 1.8, '목격자를 매수했다. "아무것도 못 봤어요..."');
+  } else if (Math.random() < 0.5) {
+    target.willReport = false;
+    setSubtitle('', 1.8, '목격자를 위협해 입을 막았다.');
+  } else {
+    setSubtitle('', 1.8, '목격자: "사람 살려!!" 위협이 실패했다!');
+    addWanted(1, '목격자 위협 실패');
+  }
+  return true;
+}
+
+function tryCollectPickup() {
+  const p = State.player;
+  const idx = State.pickups.findIndex((pu) => dist(p.x, p.y, pu.x, pu.y) < 40);
+  if (idx === -1) return false;
+  const pu = State.pickups[idx];
+  if (pu.type === 'ammo') {
+    p.ammo += pu.amount;
+    setSubtitle('', 1.4, '쓰러진 경찰의 탄약을 주웠다. (+' + pu.amount + '발)');
+  }
+  State.pickups.splice(idx, 1);
+  return true;
+}
+
+function playerTakeDamage(amount) {
+  const p = State.player;
+  if (p.hp <= 0 || p.controlLocked) return;
+  p.hp = Math.max(0, p.hp - amount);
+  p.noDamageT = 0;
+  spawnBloodBurst(p.x, p.y, 6);
 }
 
 function spawnBloodBurst(x, y, n) {
@@ -229,7 +321,7 @@ function npcCreate(x, y) {
     state: 'wander',
     target: { x, y },
     pauseTimer: rand(0.5, 2),
-    fleeTimer: 0, fleeFrom: null,
+    fleeTimer: 0, fleeFrom: null, willReport: false,
     facing: rand(0, Math.PI * 2),
     animTimer: rand(0, 10),
     color: pick(CIVILIAN_COLORS),
@@ -265,6 +357,15 @@ function npcUpdate(npc, dt) {
     return;
   }
 
+  if (npc.state === 'hostage') {
+    const p = State.player;
+    npc.x = p.x + Math.cos(p.facing) * 24;
+    npc.y = p.y + Math.sin(p.facing) * 24;
+    npc.facing = p.facing;
+    npc.speed = p.speed;
+    return;
+  }
+
   let target = npc.target;
   let sp = 55;
   if (npc.state === 'flee') {
@@ -272,7 +373,10 @@ function npcUpdate(npc, dt) {
     npc.fleeTimer -= dt;
     const away = angleTo(npc.fleeFrom.x, npc.fleeFrom.y, npc.x, npc.y);
     target = { x: npc.x + Math.cos(away) * 200, y: npc.y + Math.sin(away) * 200 };
-    if (npc.fleeTimer <= 0) { npc.state = 'wander'; npcPickTarget(npc); }
+    if (npc.fleeTimer <= 0) {
+      if (npc.willReport) { addWanted(1, '목격자 신고'); npc.willReport = false; }
+      npc.state = 'wander'; npcPickTarget(npc);
+    }
   } else {
     const d = dist(npc.x, npc.y, target.x, target.y);
     if (d < 12) {
@@ -311,6 +415,7 @@ function policeCreate(x, y) {
     deathT: 0,
     fallDir: 0,
     decalDone: false,
+    shootCooldown: rand(0.6, 1.4),
   };
 }
 
@@ -366,7 +471,8 @@ function policeUpdate(officer, dt) {
     officer.x = b.x; officer.y = b.y;
   }
 
-  if (d < 34 && State.mode === 'city' && !State.arrest) {
+  const carBlocking = p.inVehicle && p.inVehicle.speed > 30;
+  if (d < 34 && State.mode === 'city' && !State.arrest && !p.hostage && !carBlocking) {
     officer.grabTimer += dt;
   } else {
     officer.grabTimer = Math.max(0, officer.grabTimer - dt * 2);
@@ -374,19 +480,42 @@ function policeUpdate(officer, dt) {
   if (officer.grabTimer > 0.55 && !State.arrest) {
     startArrest(officer);
   }
+
+  // armed officers return fire once things have escalated (a cop has died, or wanted is maxed out)
+  officer.shootCooldown -= dt;
+  const armedResponse = (State.stats.copKills > 0 || State.wanted >= 4) && !p.hostage;
+  if (armedResponse && officer.shootCooldown <= 0 && d > 70 && d < 340 && officer.stagger <= 0) {
+    const midX = (officer.x + p.x) / 2, midY = (officer.y + p.y) / 2;
+    if (!worldIsSolid(midX, midY, 4)) {
+      officer.shootCooldown = rand(1.1, 1.9);
+      const ang = officer.facing + rand(-0.12, 0.12);
+      State.bullets.push({
+        x: officer.x + Math.cos(officer.facing) * 18, y: officer.y + Math.sin(officer.facing) * 18,
+        vx: Math.cos(ang) * 760, vy: Math.sin(ang) * 760, life: 0.7, owner: 'police',
+      });
+      spawnParticle({ type: 'muzzle', x: officer.x + Math.cos(officer.facing) * 18, y: officer.y + Math.sin(officer.facing) * 18, vx: 0, vy: 0, life: 0.08, maxLife: 0.08, size: 12 });
+    }
+  }
 }
 
 function bulletsUpdate(dt) {
   for (const b of State.bullets) {
     b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
     if (worldIsSolid(b.x, b.y, 2)) { b.dead = true; continue; }
-    const pool = b.owner === 'player' ? [...State.npcs, ...State.police] : [];
-    for (const e of pool) {
-      if (e.state === 'dead') continue;
-      if (dist(b.x, b.y, e.x, e.y) < e.radius) {
-        combatHit(e, 'gun');
+    if (b.owner === 'police') {
+      if (dist(b.x, b.y, State.player.x, State.player.y) < State.player.radius) {
+        playerTakeDamage(rand(9, 17));
         b.dead = true;
-        break;
+      }
+    } else {
+      const pool = [...State.npcs, ...State.police];
+      for (const e of pool) {
+        if (e.state === 'dead') continue;
+        if (dist(b.x, b.y, e.x, e.y) < e.radius) {
+          combatHit(e, 'gun');
+          b.dead = true;
+          break;
+        }
       }
     }
     if (b.life <= 0) b.dead = true;
@@ -481,18 +610,58 @@ function drawBodyShape(ctx, cfg, yoff, withRotationContext) {
   }
 }
 
+function drawCuffedArms(ctx, cfg, fx, fy) {
+  ctx.strokeStyle = cfg.bodyColor;
+  const stage = cfg.cuffStage || 'cuffed';
+
+  if (stage === 'handsUp') {
+    // both hands raised straight up in surrender
+    ctx.beginPath(); ctx.moveTo(-6, -2); ctx.lineTo(-10, -19); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(6, -2); ctx.lineTo(10, -19); ctx.stroke();
+    ctx.fillStyle = cfg.headColor || SKIN;
+    ctx.beginPath(); ctx.arc(-10, -19, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(10, -19, 2.5, 0, Math.PI * 2); ctx.fill();
+    return;
+  }
+  if (stage === 'cuffing1') {
+    // one wrist already seized behind the back, the other still raised
+    ctx.beginPath(); ctx.moveTo(6, -2); ctx.lineTo(10, -19); ctx.stroke();
+    ctx.fillStyle = cfg.headColor || SKIN;
+    ctx.beginPath(); ctx.arc(10, -19, 2.5, 0, Math.PI * 2); ctx.fill();
+    const bx = -fx * 9, by = -fy * 9 - 1;
+    ctx.strokeStyle = cfg.bodyColor;
+    ctx.beginPath(); ctx.moveTo(-6, -2); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.fillStyle = cfg.headColor || SKIN;
+    ctx.beginPath(); ctx.arc(bx, by, 2.5, 0, Math.PI * 2); ctx.fill();
+    return;
+  }
+  if (stage === 'cuffing2') {
+    // both wrists pulled behind the back, not yet locked together
+    const b1x = -fx * 9 - 3, b1y = -fy * 9 - 1;
+    const b2x = -fx * 9 + 3, b2y = -fy * 9 + 1;
+    ctx.beginPath(); ctx.moveTo(-6, -2); ctx.lineTo(b1x, b1y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(6, 2); ctx.lineTo(b2x, b2y); ctx.stroke();
+    ctx.fillStyle = cfg.headColor || SKIN;
+    ctx.beginPath(); ctx.arc(b1x, b1y, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(b2x, b2y, 2.5, 0, Math.PI * 2); ctx.fill();
+    return;
+  }
+  // 'cuffed': wrists locked together behind the back
+  ctx.beginPath(); ctx.moveTo(-6, -6); ctx.lineTo(-2, -2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-6, 6); ctx.lineTo(-2, 2); ctx.stroke();
+  ctx.fillStyle = '#c0c0c8';
+  ctx.fillRect(-6, -3, 6, 6);
+  ctx.strokeStyle = '#8a8a92'; ctx.lineWidth = 1.5;
+  ctx.strokeRect(-6, -3, 6, 6);
+}
+
 function drawArmsAndWeapon(ctx, e, cfg, fx, fy, cycle) {
   ctx.strokeStyle = cfg.bodyColor;
   ctx.lineWidth = 6;
   ctx.lineCap = 'round';
 
   if (cfg.cuffed) {
-    // arms bent behind back
-    ctx.strokeStyle = cfg.bodyColor;
-    ctx.beginPath(); ctx.moveTo(-6, -6); ctx.lineTo(-2, -2); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-6, 6); ctx.lineTo(-2, 2); ctx.stroke();
-    ctx.fillStyle = '#c0c0c8';
-    ctx.fillRect(-6, -3, 6, 6);
+    drawCuffedArms(ctx, cfg, fx, fy);
     return;
   }
 
@@ -525,13 +694,20 @@ function drawArmsAndWeapon(ctx, e, cfg, fx, fy, cycle) {
   }
 }
 
+const CUFF_STAGE_BY_STATE = {
+  handsUp: 'handsUp', cuffing1: 'cuffing1', cuffing2: 'cuffing2',
+  cuffed: 'cuffed', walkCuffed: 'cuffed', kneel: 'handsUp',
+};
+
 function drawPlayer(ctx) {
   const p = State.player;
+  const cuffStage = CUFF_STAGE_BY_STATE[p.state];
   const cfg = {
     bodyColor: State.mode === 'jail' ? '#e8791f' : '#3a4a6b',
     headColor: SKIN,
     weapon: (p.state === 'attackKnife' || p.state === 'attackGun') ? p.weapon : p.weapon,
-    cuffed: p.state === 'cuffed' || p.state === 'walkCuffed' || p.state === 'kneel',
+    cuffed: !!cuffStage,
+    cuffStage,
   };
   if (p.state === 'kneel') {
     ctx.save();
@@ -557,6 +733,14 @@ function drawNpc(ctx, npc) {
     ctx.textAlign = 'center';
     ctx.fillText('!', 0, 0);
     ctx.restore();
+  } else if (npc.state === 'hostage') {
+    ctx.save();
+    ctx.translate(npc.x, npc.y - 26);
+    ctx.fillStyle = '#ff5a5a';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('인질', 0, 0);
+    ctx.restore();
   }
 }
 
@@ -572,7 +756,7 @@ function drawDealer(ctx, dealer) {
 }
 
 function drawPoliceOfficer(ctx, officer) {
-  drawPerson(ctx, officer, { bodyColor: '#26428a', headColor: SKIN, hat: '#1c2f66', badge: true, weapon: 'none' });
+  drawPerson(ctx, officer, { bodyColor: '#26428a', headColor: SKIN, hat: '#1c2f66', badge: true, weapon: officer.aiming ? 'gun' : 'none' });
 }
 
 function drawBullets(ctx) {
@@ -595,8 +779,31 @@ function drawParticles(ctx) {
     } else if (pt.type === 'spark') {
       ctx.fillStyle = '#cfe8ff';
       ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.size, 0, Math.PI * 2); ctx.fill();
+    } else if (pt.type === 'text') {
+      ctx.font = 'bold 13px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = pt.color || '#fff';
+      ctx.fillText(pt.text, pt.x, pt.y);
     }
     ctx.globalAlpha = 1;
+  }
+}
+
+function drawPickups(ctx) {
+  for (const pu of State.pickups) {
+    ctx.save();
+    ctx.translate(pu.x, pu.y);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.ellipse(0, 5, 10, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#3d4b2c';
+    ctx.fillRect(-9, -6, 18, 12);
+    ctx.strokeStyle = '#1c2414'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(-9, -6, 18, 12);
+    ctx.fillStyle = '#ffe58a';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('AMMO', 0, 3);
+    ctx.restore();
   }
 }
 

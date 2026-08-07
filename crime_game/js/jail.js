@@ -13,6 +13,7 @@ const JailLayout = {
   yard: { x: 620, y: 230, w: 300, h: 370 },
   commonBounds: { x: 20, y: 40, w: 900, h: 560 },
   escapeSpot: { x: 650, y: 570 },
+  workSpots: [{ x: 390, y: 345 }, { x: 510, y: 345 }],
 };
 
 // schedule: minute-of-day -> event
@@ -52,6 +53,13 @@ function jailInit(sentenceDays, isDeathRow) {
     isDeathRow: !!isDeathRow,
     executing: false,
     escapeT: 0,
+    workT: 0,
+    earnedCash: 0,
+    misconduct: 0,
+    reputation: 0,
+    hearing: null,
+    hearingDone: isDeathRow,
+    fight: null,
   };
   State.player.x = JailLayout.cell.x + JailLayout.cell.w / 2;
   State.player.y = JailLayout.cell.y + JailLayout.cell.h / 2;
@@ -100,6 +108,9 @@ function jailUpdate(dt) {
     return;
   }
 
+  if (J.hearing) { jailHearingUpdate(dt); return; }
+  if (J.fight) { jailFightUpdate(dt); return; }
+
   const RATE = 45; // in-game minutes per real second (1 day ~= 32s)
   J.minutes += dt * RATE;
   if (J.minutes >= 1440) {
@@ -122,6 +133,11 @@ function jailUpdate(dt) {
     }
     if (J.isDeathRow) {
       setSubtitle('교도소', 2.5, '사형 집행까지 D-' + (J.sentenceDays - J.servedDays) + '.');
+    } else if (!J.hearingDone && J.sentenceDays >= 8 && J.servedDays >= Math.floor(J.sentenceDays / 2)) {
+      J.hearingDone = true;
+      J.hearing = { phase: 'start', t: 0, approved: false };
+      State.player.controlLocked = true;
+      return;
     } else {
       setSubtitle('교도소', 2.5, State.day + '일째 아침이 밝았습니다. (남은 형기 ' + (J.sentenceDays - J.servedDays) + '일)');
     }
@@ -185,6 +201,7 @@ function jailUpdate(dt) {
 
   jailEscapeUpdate(dt);
   if (!State.jail) return; // a successful jailbreak just tore down the jail scene
+  jailWorkUpdate(dt);
 
   // ambient inmates wander within common bounds (skip while locked - stay in their own bunks conceptually, just freeze)
   for (const inm of J.inmates) {
@@ -253,34 +270,139 @@ function jailbreakSuccess() {
   policeTrySpawn();
 }
 
+function jailWorkUpdate(dt) {
+  const J = State.jail;
+  const p = State.player;
+  const inWork = J.current && J.current.room === 'workroom' && !J.locked;
+  const nearBench = inWork && JailLayout.workSpots.some((s) => dist(p.x, p.y, s.x, s.y) < 48);
+  const holdingE = !!(State.keys['e'] || State.keys['E']);
+  if (nearBench && holdingE) {
+    J.workT += dt;
+    if (J.workT >= 2.5) {
+      J.workT = 0;
+      J.earnedCash += 15;
+      setSubtitle('', 1.4, '작업을 마쳤다. (+15원, 출소 시 지급)');
+    }
+  } else {
+    J.workT = 0;
+  }
+}
+
+const HEARING_PHASES = { start: 2.0, review: 2.2, verdict: 2.4 };
+
+function jailHearingUpdate(dt) {
+  const J = State.jail;
+  const H = J.hearing;
+  H.t += dt;
+  switch (H.phase) {
+    case 'start':
+      if (H.t >= HEARING_PHASES.start) {
+        H.phase = 'review'; H.t = 0;
+        const clean = J.misconduct === 0;
+        setSubtitle('가석방 심사위원회', HEARING_PHASES.review, clean
+          ? '그동안 모범적인 수감 생활을 확인했습니다.'
+          : '규율 위반 기록이 ' + J.misconduct + '건 확인되었습니다.');
+      }
+      break;
+    case 'review':
+      if (H.t >= HEARING_PHASES.review) {
+        H.phase = 'verdict'; H.t = 0;
+        const chance = J.misconduct === 0 ? 0.6 : 0.05;
+        H.approved = Math.random() < chance;
+        if (H.approved) {
+          const remain = J.sentenceDays - J.servedDays;
+          J.sentenceDays = J.servedDays + Math.max(1, Math.ceil(remain / 2));
+          setSubtitle('가석방 심사위원회', HEARING_PHASES.verdict, '가석방이 승인되었습니다! 형기가 단축됩니다.');
+        } else {
+          setSubtitle('가석방 심사위원회', HEARING_PHASES.verdict, '가석방이 기각되었습니다. 계속 복역하십시오.');
+        }
+      }
+      break;
+    case 'verdict':
+      if (H.t >= HEARING_PHASES.verdict) {
+        J.hearing = null;
+        State.player.controlLocked = false;
+      }
+      break;
+  }
+}
+
+function tryStartFight() {
+  const J = State.jail;
+  if (!J || J.locked || J.hearing || J.fight || J.releasing || J.executing) return;
+  const p = State.player;
+  const target = J.inmates.find((i) => dist(i.x, i.y, p.x, p.y) < 45);
+  if (!target) return;
+  J.fight = { target, t: 0 };
+  State.player.controlLocked = true;
+  setSubtitle('', 1.6, '재소자와 시비가 붙었다!');
+}
+
+function jailFightUpdate(dt) {
+  const J = State.jail;
+  const F = J.fight;
+  F.t += dt;
+  if (F.t >= 1.6) {
+    const caught = J.guards.some((g) => dist(g.x, g.y, State.player.x, State.player.y) < 120);
+    if (caught) {
+      J.misconduct += 1;
+      J.sentenceDays += 1;
+      setSubtitle('교도관', 2.4, '"싸움 적발! 독방 하루 추가."');
+    } else if (Math.random() < 0.65) {
+      J.reputation += 1;
+      setSubtitle('', 2, '재소자를 제압했다. 평판이 올랐다.');
+    } else {
+      setSubtitle('', 2, '얻어맞았다... 그래도 들키지는 않았다.');
+    }
+    J.fight = null;
+    State.player.controlLocked = false;
+  }
+}
+
 function playerCheckJailPrompt() {
   const J = State.jail;
+  const p = State.player;
   if (J.locked) { State.prompt = '취침 시간입니다 (자유 이동 불가)'; return; }
   const inYard = J.current && J.current.room === 'yard';
-  if (inYard && dist(State.player.x, State.player.y, JailLayout.escapeSpot.x, JailLayout.escapeSpot.y) < 45) {
+  if (inYard && dist(p.x, p.y, JailLayout.escapeSpot.x, JailLayout.escapeSpot.y) < 45) {
     State.prompt = J.escapeT > 0
       ? '탈옥 시도 중... ' + J.escapeT.toFixed(1) + ' / 3.0초 (E 유지, 경비 접근 시 발각)'
       : 'E를 누르고 있으면 철조망을 넘습니다 (경비를 조심하세요)';
     return;
   }
+  const inWork = J.current && J.current.room === 'workroom';
+  if (inWork && JailLayout.workSpots.some((s) => dist(p.x, p.y, s.x, s.y) < 48)) {
+    State.prompt = J.workT > 0
+      ? '작업 중... ' + J.workT.toFixed(1) + ' / 2.5초 (E 유지)'
+      : 'E를 누르고 있으면 작업으로 돈을 법니다';
+    return;
+  }
+  const nearInmate = J.inmates.find((i) => dist(p.x, p.y, i.x, i.y) < 45);
+  if (nearInmate) { State.prompt = 'E : 시비 걸기'; return; }
   State.prompt = '';
 }
 
 function jailRelease() {
+  const earned = State.jail.earnedCash || 0;
   State.stats.kills = 0;
   State.stats.thefts = 0;
+  State.stats.copKills = 0;
+  State.stats.escaped = 0;
+  State.stats.bribeFailed = false;
+  State.stats.cash += earned;
   State.wanted = 0;
   State.police = [];
-  State.cars = [];
+  State.cars = State.cars.filter((c) => c.kind === 'civilian');
   State.bullets = [];
   State.player.controlLocked = false;
   State.player.inv = { knife: false, gun: false };
   State.player.weapon = 'fists';
+  State.player.disguises = 0;
   State.homeTaken = { knife: false, gun: false };
   State.jail = null;
   enterHome();
   updateCamera(false);
-  setSubtitle('나레이션', 3.5, '자유의 몸이 되었다. 하지만 손에는 아무것도 남지 않았다...');
+  setSubtitle('나레이션', 3.5, '자유의 몸이 되었다.' + (earned > 0 ? ' 작업으로 모은 💰' + earned + '원이 남아있다.' : ' 하지만 손에는 아무것도 남지 않았다...'));
 }
 
 function jailDraw(ctx) {
@@ -324,6 +446,23 @@ function jailDraw(ctx) {
 
   drawPlayer(ctx);
   drawParticles(ctx);
+
+  if (State.jail.fight) {
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(0, 0, JailLayout.w, JailLayout.h);
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillStyle = '#ff5a5a';
+    ctx.textAlign = 'center';
+    ctx.fillText('몸싸움 중...', JailLayout.w / 2, JailLayout.h / 2);
+  }
+  if (State.jail.hearing) {
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, 0, JailLayout.w, JailLayout.h);
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillStyle = '#ffe28a';
+    ctx.textAlign = 'center';
+    ctx.fillText('가석방 심사', JailLayout.w / 2, JailLayout.h / 2 - 20);
+  }
 }
 
 function drawRoomFloor(ctx, r, color, label) {

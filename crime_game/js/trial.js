@@ -16,7 +16,7 @@ const TrialLayout = {
   gallery: { x: 90, y: 360, w: 520, h: 90 },
 };
 
-function computeSentence(kills, thefts, copKills, escaped) {
+function computeSentence(kills, thefts, copKills, escaped, bribeFailed) {
   copKills = copKills || 0;
   escaped = escaped || 0;
   if (kills >= 4 || copKills >= 1 || escaped >= 1) {
@@ -27,6 +27,7 @@ function computeSentence(kills, thefts, copKills, escaped) {
   else if (kills === 1) days = 6;
   else if (kills === 2) days = 9;
   else days = 13; // kills === 3
+  if (bribeFailed) days += 1;
   return { death: false, days, kills, thefts, copKills, escaped };
 }
 
@@ -44,6 +45,7 @@ function trialInit(stats) {
   State.trial = {
     phase: 'enter', t: 0,
     kills: stats.kills, thefts: stats.thefts, copKills: stats.copKills || 0, escaped: stats.escaped || 0,
+    bribeFailed: !!stats.bribeFailed,
     sentence: null,
     judge: { kind: 'npc', x: TrialLayout.judgeSpot.x, y: TrialLayout.judgeSpot.y, radius: 13, facing: Math.PI / 2, animTimer: 0, speed: 0 },
     prosecutor: { kind: 'npc', x: TrialLayout.prosecutorSpot.x, y: TrialLayout.prosecutorSpot.y, radius: 13, facing: Math.PI / 2, animTimer: 0, speed: 0 },
@@ -86,7 +88,7 @@ function trialUpdate(dt) {
     case 'deliberate':
       if (T.t >= TRIAL_PHASES.deliberate) {
         T.phase = 'verdict'; T.t = 0;
-        T.sentence = computeSentence(T.kills, T.thefts, T.copKills, T.escaped);
+        T.sentence = computeSentence(T.kills, T.thefts, T.copKills, T.escaped, T.bribeFailed);
         if (typeof sfxGavel === 'function') sfxGavel();
         if (T.sentence.death) {
           setSubtitle('판사', TRIAL_PHASES.verdict, '판사: "탕! 탕! 탕! — 피고인을 사형에 처한다. 형은 3일 뒤 집행한다."');
@@ -111,6 +113,7 @@ function buildChargeText(T) {
   if (T.kills > 0) parts.push('일반인 살해 ' + T.kills + '명');
   if (T.thefts > 0) parts.push('절도 ' + T.thefts + '회');
   if (T.escaped > 0) parts.push('탈옥 ' + T.escaped + '회');
+  if (T.bribeFailed) parts.push('공무원 뇌물공여 시도');
   if (parts.length === 0) return '검사: 뚜렷한 증거는 없으나 정황상 기소합니다.';
   return '검사: 피고인은 ' + parts.join(', ') + '의 혐의를 받고 있습니다. 엄중한 처벌을 요청합니다.';
 }
@@ -122,6 +125,7 @@ function trialFinish() {
   State.stats.thefts = 0;
   State.stats.copKills = 0;
   State.stats.escaped = 0;
+  State.stats.bribeFailed = false;
   State.player.controlLocked = false;
   if (sentence.death) {
     jailInit(3, true);

@@ -29,11 +29,37 @@ function updateCamera(smooth) {
 }
 
 function cityUpdate(dt) {
-  playerUpdate(dt);
+  if (State.player.inVehicle) vehicleUpdate(dt);
+  else playerUpdate(dt);
   for (const npc of State.npcs) npcUpdate(npc, dt);
   for (const p of State.police) policeUpdate(p, dt);
   bulletsUpdate(dt);
   wantedUpdate(dt);
+  playerHealthUpdate(dt);
+}
+
+function playerHealthUpdate(dt) {
+  const p = State.player;
+  p.noDamageT += dt;
+  if (p.hp < 100 && p.noDamageT > 4) p.hp = Math.min(100, p.hp + dt * 8);
+
+  if (p.hp <= 0 && !p.subdued) {
+    p.subdued = true;
+    p.subduedT = 0;
+    p.controlLocked = true;
+    p.state = 'idle';
+    if (p.inVehicle) { p.inVehicle.parked = true; p.inVehicle = null; }
+    setSubtitle('', 2.4, '총에 맞아 쓰러졌다...');
+  }
+  if (p.subdued) {
+    p.subduedT += dt;
+    if (p.subduedT > 1.3 && !State.arrest) {
+      let officer = State.police.find((o) => o.state === 'chase');
+      if (!officer) { policeSpawnNear(p.x, p.y); officer = State.police[State.police.length - 1]; }
+      p.subdued = false;
+      startArrest(officer);
+    }
+  }
 }
 
 function update(dt) {
@@ -58,6 +84,7 @@ function update(dt) {
 
 function drawCityScene(ctx) {
   worldDraw(ctx);
+  drawPickups(ctx);
   for (const npc of State.npcs) if (npc.state === 'dead') drawNpc(ctx, npc);
   for (const p of State.police) if (p.state === 'dead') drawPoliceOfficer(ctx, p);
   for (const car of State.cars) drawCar(ctx, car);
@@ -66,7 +93,7 @@ function drawCityScene(ctx) {
   for (const p of State.police) if (p.state !== 'dead') drawPoliceOfficer(ctx, p);
   drawBullets(ctx);
   drawParticles(ctx);
-  if (!(State.arrest && State.arrest.hidePlayer)) drawPlayer(ctx);
+  if (!(State.arrest && State.arrest.hidePlayer) && !State.player.inVehicle) drawPlayer(ctx);
 }
 
 function render() {
@@ -120,8 +147,10 @@ function startGame() {
   State.bullets = [];
   State.particles = [];
   State.decals = [];
+  State.pickups = [];
+  carsSpawnParked(10);
   State.homeTaken = { knife: false, gun: false };
-  State.stats = { kills: 0, thefts: 0, cash: 0, copKills: 0, escaped: 0 };
+  State.stats = { kills: 0, thefts: 0, cash: 0, copKills: 0, escaped: 0, bribeFailed: false };
   State.arrest = null;
   State.trial = null;
   State.jail = null;
@@ -150,6 +179,7 @@ function bindInput() {
     if (e.key === '1') playerSetWeapon('fists');
     if (e.key === '2') playerSetWeapon('knife');
     if (e.key === '3') playerSetWeapon('gun');
+    if (e.key === '4') useDisguise();
     if (e.key === 'e' || e.key === 'E') tryInteract();
   });
   window.addEventListener('keyup', (e) => { State.keys[e.key] = false; });

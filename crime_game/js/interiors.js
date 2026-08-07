@@ -20,6 +20,7 @@ const StoreInterior = {
     { x: 160, y: 40, w: 90, h: 30, item: '음료수' },
     { x: 280, y: 40, w: 90, h: 30, item: '라면' },
     { x: 40, y: 120, w: 90, h: 30, item: '담배' },
+    { x: 160, y: 120, w: 90, h: 30, item: '변장옷' },
     { x: 280, y: 120, w: 90, h: 30, item: '현금' },
   ],
   counter: { x: 150, y: 190, w: 120, h: 26 },
@@ -64,14 +65,21 @@ function exitStoreToCity() {
 
 function tryInteract() {
   if (State.mode === 'city') {
-    if (State.dealer && dist(State.player.x, State.player.y, State.dealer.x, State.dealer.y) < 55) {
-      dealerInteract();
-      return;
-    }
-    const near = worldNearestDoor(State.player.x, State.player.y, 55);
-    if (!near) return;
-    if (near === World.home) enterHome();
-    else enterStore(near.id);
+    const p = State.player;
+    if (p.inVehicle) { vehicleExit(); return; }
+    if (p.hostage) { releaseHostage(); return; }
+    if (tryCollectPickup()) return;
+    if (State.dealer && dist(p.x, p.y, State.dealer.x, State.dealer.y) < 55) { dealerInteract(); return; }
+    if (trySilenceWitness()) return;
+    const car = State.cars.find((c) => c.kind === 'civilian' && dist(p.x, p.y, c.x, c.y) < 45);
+    if (car) { vehicleEnter(car); return; }
+    if (grabHostage()) return;
+    const near = worldNearestDoor(p.x, p.y, 55);
+    if (near) { if (near === World.home) enterHome(); else enterStore(near.id); }
+  } else if (State.mode === 'arrest') {
+    attemptBribeArrest();
+  } else if (State.mode === 'jail') {
+    tryStartFight();
   } else if (State.mode === 'home') {
     if (!State.homeTaken.knife && dist(State.player.x, State.player.y, HomeInterior.knifeSpot.x, HomeInterior.knifeSpot.y) < 40) {
       State.homeTaken.knife = true;
@@ -124,6 +132,9 @@ function stealItem(store, shelf) {
     const amount = randInt(20, 80);
     State.stats.cash += amount;
     setSubtitle('현금 ' + amount + '원을 훔쳤다!', 1.2);
+  } else if (shelf.item === '변장옷') {
+    State.player.disguises = (State.player.disguises || 0) + 1;
+    setSubtitle('변장용 옷을 챙겼다. (도시에서 4번 키로 사용)', 1.8);
   } else {
     setSubtitle('"' + shelf.item + '"을(를) 훔쳤다!', 1.2);
   }
@@ -137,6 +148,23 @@ function stealItem(store, shelf) {
     if (typeof sfxAlarm === 'function') sfxAlarm();
     setSubtitle('점원: "도둑이야!! 신고했어요!"', 2.2, '경찰이 출동합니다');
   }
+}
+
+function useDisguise() {
+  if (State.mode !== 'city') return;
+  const p = State.player;
+  if (!p.disguises) {
+    setSubtitle('', 1.4, '변장옷이 없다. (편의점에서 훔칠 수 있다)');
+    return;
+  }
+  if (State.wanted <= 0) {
+    setSubtitle('', 1.4, '지금은 변장할 필요가 없다.');
+    return;
+  }
+  p.disguises -= 1;
+  State.wanted = clamp(State.wanted - 2, 0, 5);
+  State.wantedSightTimer = 8;
+  setSubtitle('', 2, '옷을 갈아입고 인파에 숨었다. 경찰이 놓쳤다.');
 }
 
 function updateHome(dt) {

@@ -43,9 +43,9 @@ function wantedUpdate(dt) {
 }
 
 const ARREST_PHASES = {
-  freeze: 1.0,
-  kneel: 1.0,
-  cuff: 1.9,
+  freeze: 1.2,
+  kneel: 1.1,
+  cuff: 2.7,
   escort: 2.4,
   intoCar: 0.8,
   drive: 4.2,
@@ -54,13 +54,41 @@ const ARREST_PHASES = {
 
 function startArrest(officer) {
   if (State.arrest) return;
-  State.arrest = { phase: 'freeze', t: 0, officer, car: null, hidePlayer: false, startX: State.player.x, startY: State.player.y };
+  if (State.player.inVehicle) { State.player.inVehicle.parked = true; State.player.inVehicle = null; }
+  if (State.player.hostage) releaseHostage();
+  officer.aiming = false;
+  State.arrest = { phase: 'freeze', t: 0, officer, car: null, hidePlayer: false, startX: State.player.x, startY: State.player.y, bribeTried: false };
   State.mode = 'arrest';
   State.player.controlLocked = true;
   State.player.vx = 0; State.player.vy = 0;
   State.player.facing = angleTo(State.player.x, State.player.y, officer.x, officer.y) + Math.PI;
   if (typeof sirenStop === 'function') sirenStop();
   setSubtitle('경찰', 1.0, '거기 서! 손들어! 움직이지 마!');
+}
+
+function attemptBribeArrest() {
+  const A = State.arrest;
+  if (!A || A.phase !== 'freeze' || A.bribeTried) return;
+  A.bribeTried = true;
+  const offer = Math.min(150, State.stats.cash);
+  if (offer < 20) {
+    setSubtitle('', 1.6, '(수중에 가진 돈이 부족하다...)');
+    return;
+  }
+  State.stats.cash -= offer;
+  const chance = Math.min(0.6, offer / 250);
+  if (Math.random() < chance) {
+    setSubtitle('경찰', 2, '경찰: "...못 본 걸로 하지." (뇌물 💰' + offer + ')');
+    const officer = A.officer;
+    State.arrest = null;
+    State.mode = 'city';
+    State.player.controlLocked = false;
+    officer.grabTimer = -2.5; // brief grace period so the same officer doesn't instantly re-grab
+    officer.state = 'chase';
+  } else {
+    State.stats.bribeFailed = true;
+    setSubtitle('경찰', 2.2, '경찰: "매수 시도?! 가중처벌감이다." (💰' + offer + ' 날림)');
+  }
 }
 
 function arrestUpdate(dt) {
@@ -76,23 +104,42 @@ function arrestUpdate(dt) {
   switch (A.phase) {
     case 'freeze':
       p.state = 'idle';
+      if (officer) officer.aiming = true;
       if (A.t >= ARREST_PHASES.freeze) { A.phase = 'kneel'; A.t = 0; setSubtitle('경찰', ARREST_PHASES.kneel, '무릎 꿇어! 두 손은 머리 위로!'); }
       break;
     case 'kneel':
       p.state = 'kneel';
+      if (officer) officer.aiming = true;
       if (A.t >= ARREST_PHASES.kneel) { A.phase = 'cuff'; A.t = 0; setSubtitle('경찰', ARREST_PHASES.cuff, '수갑을 채우겠습니다. 저항하지 마십시오.'); }
       break;
-    case 'cuff':
-      p.state = 'cuffed';
+    case 'cuff': {
+      const frac = A.t / ARREST_PHASES.cuff;
+      if (officer) officer.aiming = frac < 0.2;
+      if (frac < 0.2) p.state = 'handsUp';
+      else if (frac < 0.42) p.state = 'cuffing1';
+      else if (frac < 0.62) p.state = 'cuffing2';
+      else p.state = 'cuffed';
+
       if (officer) {
         const behind = p.facing + Math.PI;
-        officer.x = lerp(officer.x, p.x + Math.cos(behind) * 26, dt * 3);
-        officer.y = lerp(officer.y, p.y + Math.sin(behind) * 26, dt * 3);
+        const approachT = clamp(frac / 0.42, 0, 1); // officer closes in as the first wrist is seized
+        officer.x = lerp(officer.x, p.x + Math.cos(behind) * (60 - 34 * approachT), dt * 3);
+        officer.y = lerp(officer.y, p.y + Math.sin(behind) * (60 - 34 * approachT), dt * 3);
       }
-      if (!A.cuffSoundPlayed && A.t >= ARREST_PHASES.cuff * 0.82) {
+
+      if (!A.cuff1Announced && frac >= 0.2) {
+        A.cuff1Announced = true;
+        setSubtitle('경찰', 1.2, '경찰: "손목 잡습니다. 움직이지 마세요."');
+      }
+      if (!A.cuffSoundPlayed && frac >= 0.62) {
         A.cuffSoundPlayed = true;
         spawnParticle({ type: 'spark', x: p.x, y: p.y, vx: 0, vy: -10, life: 0.4, maxLife: 0.4, size: 5 });
+        spawnParticle({ type: 'text', text: '찰칵!', x: p.x, y: p.y - 22, vx: 0, vy: -16, life: 0.8, maxLife: 0.8, color: '#dfe6ea' });
         if (typeof sfxCuff === 'function') sfxCuff();
+      }
+      if (!A.cuffTugAnnounced && frac >= 0.85) {
+        A.cuffTugAnnounced = true;
+        setSubtitle('경찰', ARREST_PHASES.cuff * 0.15, '경찰: "됐습니다. 일어나세요."');
       }
       if (A.t >= ARREST_PHASES.cuff) {
         A.phase = 'escort'; A.t = 0;
@@ -101,6 +148,7 @@ function arrestUpdate(dt) {
         setSubtitle('경찰', ARREST_PHASES.escort, '순찰차로 이동합니다.');
       }
       break;
+    }
     case 'escort': {
       p.state = 'walkCuffed';
       const t = clamp(A.t / ARREST_PHASES.escort, 0, 1);
@@ -153,11 +201,14 @@ function finishArrestIntoTrial() {
   State.arrest = null;
   State.wanted = 0;
   State.police = [];
-  State.cars = [];
+  State.cars = State.cars.filter((c) => c.kind === 'civilian');
   State.bullets = [];
   State.player.state = 'idle';
   State.player.weapon = 'fists';
-  trialInit({ kills: State.stats.kills, thefts: State.stats.thefts, copKills: State.stats.copKills, escaped: State.stats.escaped });
+  trialInit({
+    kills: State.stats.kills, thefts: State.stats.thefts, copKills: State.stats.copKills,
+    escaped: State.stats.escaped, bribeFailed: State.stats.bribeFailed,
+  });
 }
 
 function getCameraTarget() {

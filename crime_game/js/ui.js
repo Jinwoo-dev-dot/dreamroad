@@ -10,6 +10,7 @@ function uiDraw(ctx) {
   if (State.mode === 'city' || State.mode === 'arrest') {
     drawWantedStars(ctx);
     drawCriminalRecord(ctx);
+    drawHealthBar(ctx);
     drawWeaponBar(ctx);
     drawMinimap(ctx);
   } else if (State.mode === 'home' || State.mode === 'store') {
@@ -56,6 +57,27 @@ function drawCriminalRecord(ctx) {
   if (s.copKills > 0 || s.escaped > 0) {
     ctx.fillStyle = '#ff5a5a';
     ctx.fillText('🚓 경찰 살해 ' + s.copKills + '  🕳 탈옥 ' + s.escaped + ' (사형 확정)', 22, 95);
+  }
+}
+
+function drawHealthBar(ctx) {
+  const p = State.player;
+  const y = State.stats && (State.stats.copKills > 0 || State.stats.escaped > 0) ? 108 : 90;
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(14, y, 150, 20);
+  ctx.fillStyle = p.hp > 40 ? '#4ad35a' : '#ff5a5a';
+  ctx.fillRect(18, y + 4, 142 * (p.hp / 100), 12);
+  ctx.strokeStyle = '#222'; ctx.lineWidth = 1;
+  ctx.strokeRect(18, y + 4, 142, 12);
+  ctx.fillStyle = '#fff';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('체력 ' + Math.round(p.hp), 18 + 71, y + 13);
+  if (p.disguises > 0) {
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#8affb0';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('🥸 변장 x' + p.disguises + ' (4)', 172, y + 15);
   }
 }
 
@@ -163,6 +185,11 @@ function drawJailHud(ctx) {
   } else {
     ctx.fillStyle = '#ffd23f';
     ctx.fillText('복역 ' + (J.servedDays + 1) + '/' + J.sentenceDays + '일째 · 남은 형기 ' + remain + '일 · ' + (J.current ? J.current.label : ''), State.w / 2, 58);
+    if (J.earnedCash > 0 || J.reputation > 0) {
+      ctx.font = '11px sans-serif';
+      ctx.fillStyle = '#8affb0';
+      ctx.fillText('💰 작업 수입 ' + J.earnedCash + '원 · 평판 ' + J.reputation, State.w / 2, 72);
+    }
   }
 
   if (J.releasing) {
