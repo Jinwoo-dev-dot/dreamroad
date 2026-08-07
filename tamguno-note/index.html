@@ -1,0 +1,2039 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>탐구노트 · 조사와 기록의 캔버스</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@300;400;700&family=Gowun+Batang&family=Nanum+Pen+Script&family=Jua&family=Nanum+Gothic:wght@400;700;800&family=Song+Myung&family=Gowun+Dodum&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<style>
+  :root{
+    --canvas:#F3ECDD;
+    --canvas2:#EFE6D2;
+    --ink:#3B3226;
+    --ink-soft:#7C7160;
+    --ink-faint:#a89d89;
+    --paper:#FFFCF5;
+    --terracotta:#C1653F;
+    --sage:#7C9473;
+    --dusty:#6B87A0;
+    --mustard:#D2A23D;
+    --plum:#8C5B7A;
+    --line: rgba(59,50,38,0.16);
+    --line-soft: rgba(59,50,38,0.08);
+    --linkblue:#1a56db;
+    --shadow: 0 8px 24px rgba(59,50,38,0.14);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family:'Gowun Dodum','Nanum Gothic',sans-serif;
+    color:var(--ink);
+    background:var(--canvas);
+    overflow:hidden;
+  }
+
+  /* ---------- canvas texture ---------- */
+  body::before{
+    content:'';
+    position:fixed; inset:0; z-index:0; pointer-events:none;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(59,50,38,0.028) 0px, rgba(59,50,38,0.028) 1px, transparent 1px, transparent 3px),
+      repeating-linear-gradient(90deg, rgba(59,50,38,0.022) 0px, rgba(59,50,38,0.022) 1px, transparent 1px, transparent 3px);
+  }
+  .noise{
+    position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.05; mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  }
+  .brush-wash{ position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+  .swash{ position:absolute; filter: blur(18px); mix-blend-mode:multiply; opacity:0.4; }
+  .swash.s1{ width:480px;height:320px; top:-90px; left:-100px; background: var(--sage); border-radius: 60% 40% 55% 45% / 45% 55% 45% 55%; transform: rotate(-12deg); }
+  .swash.s2{ width:420px;height:300px; top:5%; right:-120px; background: var(--terracotta); border-radius: 45% 55% 40% 60% / 55% 40% 60% 40%; transform: rotate(18deg); opacity:0.32;}
+  .swash.s3{ width:520px;height:360px; bottom:-140px; left:8%; background: var(--dusty); border-radius: 50% 50% 60% 40% / 40% 55% 45% 60%; transform: rotate(6deg); opacity:0.3;}
+  .swash.s4{ width:360px;height:260px; bottom:-60px; right:2%; background: var(--mustard); border-radius: 55% 45% 50% 50% / 50% 45% 55% 50%; transform: rotate(-20deg); opacity:0.28;}
+
+  /* ---------- login ---------- */
+  #loginScreen{
+    position:relative; z-index:2;
+    height:100vh; display:flex; align-items:center; justify-content:center;
+    animation: fadeIn .5s ease;
+  }
+  .login-card{
+    background: var(--paper);
+    border: 2.5px solid var(--ink);
+    border-radius: 255px 18px 225px 18px / 18px 225px 18px 255px;
+    padding: 54px 50px 44px;
+    width: 400px;
+    text-align:center;
+    box-shadow: var(--shadow);
+    position:relative;
+    transform: rotate(-0.4deg);
+  }
+  .login-card::before{
+    content:'';
+    position:absolute; inset:9px;
+    border: 1px solid rgba(59,50,38,0.25);
+    border-radius: 255px 18px 225px 18px / 18px 225px 18px 255px;
+    pointer-events:none;
+  }
+  .brand-mark{ font-size:38px; margin-bottom:4px; }
+  .login-title{
+    font-family:'Caveat', 'Gaegu', sans-serif;
+    font-weight:700;
+    font-size: 46px;
+    color: var(--ink);
+    margin: 0;
+    position:relative; display:inline-block;
+  }
+  .login-title svg{ position:absolute; left:0; right:0; bottom:-10px; width:100%; height:14px; }
+  .login-sub{
+    font-size:14.5px; color:var(--ink-soft); margin: 14px 0 28px; line-height:1.6;
+  }
+  .login-card input{
+    width:100%;
+    padding: 13px 18px;
+    border-radius: 14px;
+    border: 2px solid var(--line);
+    background: var(--canvas2);
+    font-family:'Gowun Dodum', sans-serif;
+    font-size:15.5px;
+    color: var(--ink);
+    outline:none;
+    text-align:center;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .login-card input:focus{
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 4px rgba(193,101,63,0.14);
+  }
+  .login-card button{
+    margin-top:16px;
+    width:100%;
+    padding:13px;
+    border: 2px solid var(--ink);
+    border-radius:14px;
+    background: var(--terracotta);
+    color:#fff;
+    font-family:'Jua', sans-serif;
+    font-size:16px;
+    cursor:pointer;
+    box-shadow: 3px 3px 0 var(--ink);
+    transition: transform .12s ease, box-shadow .12s ease;
+  }
+  .login-card button:hover{ transform: translate(-2px,-2px); box-shadow: 5px 5px 0 var(--ink); }
+  .login-card button:active{ transform: translate(0,0); box-shadow: 1px 1px 0 var(--ink); }
+  .login-hint{ margin-top:16px; font-size:12px; color:var(--ink-faint); }
+
+  .setup-card{ width:460px; text-align:left; }
+  .setup-card .login-title{ display:block; }
+  .setup-steps{ margin: 14px 0 16px; padding-left:20px; font-size:13.5px; color:var(--ink-soft); line-height:1.9; }
+  .setup-steps li{ margin-bottom:2px; }
+  .setup-steps a{ color: var(--terracotta); }
+  .setup-steps code{ background:rgba(59,50,38,0.08); padding:1px 6px; border-radius:5px; font-family:'Courier New',monospace; }
+  #fbConfigInput{
+    width:100%; min-height:120px; border-radius:12px; border:2px solid var(--line);
+    background: var(--canvas2); padding:12px; font-family:'Courier New',monospace; font-size:12.5px;
+    color: var(--ink); outline:none; resize:vertical;
+  }
+  #fbConfigInput:focus{ border-color: var(--terracotta); }
+  .ghost-btn{
+    background:transparent !important; color: var(--ink-soft) !important; box-shadow:none !important;
+    border: 1.5px solid var(--line) !important; margin-top:8px !important; font-family:'Gowun Dodum',sans-serif !important;
+    font-size:13px !important;
+  }
+  .ghost-btn:hover{ border-color: var(--ink) !important; color: var(--ink) !important; transform:none !important; }
+
+  @keyframes fadeIn{ from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);} }
+
+  /* ---------- auth (signup / login) ---------- */
+  /* !important overrides below are needed because ".login-card button" (a generic rule
+     for the big submit buttons) otherwise outranks this class in specificity. */
+  .auth-tabs{ display:flex; gap:6px; margin: 20px 0 16px; border-bottom:2px solid var(--line); }
+  .auth-tab-btn{
+    flex:1;
+    width:auto !important;
+    margin-top:0 !important;
+    padding:9px !important;
+    border:none !important;
+    border-bottom:3px solid transparent !important;
+    border-radius:0 !important;
+    background:transparent !important;
+    box-shadow:none !important;
+    color:var(--ink-soft) !important;
+    cursor:pointer;
+    font-family:'Jua',sans-serif; font-size:14px;
+    transition: all .15s ease;
+  }
+  .auth-tab-btn:hover{ background:rgba(59,50,38,0.06) !important; }
+  .auth-tab-btn.active{ color:var(--terracotta) !important; border-bottom-color:var(--terracotta) !important; }
+  .auth-form{ display:flex; flex-direction:column; gap:10px; }
+  .auth-form input{
+    width:100%; padding:13px 18px; border-radius:14px; border:2px solid var(--line);
+    background:var(--canvas2); font-family:'Gowun Dodum',sans-serif; font-size:15px;
+    color:var(--ink); outline:none; text-align:left;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .auth-form input:focus{ border-color: var(--terracotta); box-shadow: 0 0 0 4px rgba(193,101,63,0.14); }
+  .auth-form button[type="submit"]{
+    margin-top:6px; width:100%; padding:13px; border:2px solid var(--ink); border-radius:14px;
+    background:var(--terracotta); color:#fff; font-family:'Jua',sans-serif; font-size:16px; cursor:pointer;
+    box-shadow: 3px 3px 0 var(--ink); transition: transform .12s ease, box-shadow .12s ease;
+  }
+  .auth-form button[type="submit"]:hover{ transform: translate(-2px,-2px); box-shadow: 5px 5px 0 var(--ink); }
+  .auth-form button[type="submit"]:active{ transform: translate(0,0); box-shadow: 1px 1px 0 var(--ink); }
+
+  /* ---------- app shell ---------- */
+  #app{ display:none; position:relative; z-index:2; height:100vh; flex-direction:column; }
+  #app.active{ display:flex; }
+
+  header.topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 14px 26px;
+    background: rgba(255,252,245,0.75);
+    backdrop-filter: blur(8px);
+    border-bottom: 2px solid var(--ink);
+  }
+  .brand{
+    display:flex; align-items:center; gap:8px;
+    font-family:'Caveat', sans-serif; font-weight:700; font-size:26px; color:var(--ink);
+  }
+  .user-chip{
+    display:flex; align-items:center; gap:10px;
+    font-size:13.5px; color:var(--ink-soft);
+  }
+  .user-chip .avatar{
+    width:28px; height:28px; border-radius:50%;
+    background: var(--sage);
+    border: 2px solid var(--ink);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Jua',sans-serif; color:#fff; font-size:13px;
+  }
+  .save-status{ font-size:12px; color: var(--ink-faint); display:flex; align-items:center; gap:5px; }
+  .save-status .sdot{ width:6px;height:6px;border-radius:50%; background:var(--sage); }
+  .save-status.saving .sdot{ background: var(--mustard); }
+  .logout-btn{
+    border:1.5px solid var(--line); background:transparent; color:var(--ink-soft);
+    font-size:12.5px; cursor:pointer; padding:5px 12px; border-radius:10px;
+    font-family:'Gowun Dodum',sans-serif;
+  }
+  .logout-btn:hover{ border-color:var(--ink); color:var(--ink); }
+
+  .main-area{ flex:1; display:flex; overflow:hidden; }
+
+  /* ---------- tabs sidebar ---------- */
+  .tab-rail{
+    width: 226px;
+    padding: 18px 12px;
+    display:flex; flex-direction:column; gap:7px;
+    border-right: 2px solid var(--ink);
+    overflow-y:auto;
+    background: rgba(255,252,245,0.35);
+  }
+  .rail-label{ font-size:11px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:0.08em; padding:2px 10px 6px; }
+  .section-block{ display:flex; flex-direction:column; gap:6px; margin-bottom:8px; }
+  .section-header{ display:flex; align-items:center; gap:4px; padding:2px 8px; }
+  .section-header .sname{
+    flex:1; font-size:11.5px; font-weight:700; color:var(--ink-soft);
+    text-transform:uppercase; letter-spacing:0.06em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .section-header .sec-btn{ opacity:0; font-size:11px; color:var(--ink-soft); cursor:pointer; padding:1px 4px; flex-shrink:0; }
+  .section-header:hover .sec-btn{ opacity:0.55; }
+  .section-header .sec-btn:hover{ opacity:1; color:var(--terracotta); }
+  .tab-item{
+    display:flex; align-items:center; gap:9px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    cursor:pointer;
+    font-size:14px;
+    color: var(--ink-soft);
+    border: 1.5px solid transparent;
+    transition: all .15s ease;
+  }
+  .tab-item .swatch{ width:9px; height:9px; border-radius:50%; flex-shrink:0; border:1.5px solid var(--ink); }
+  .tab-item span.label{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tab-item:hover{ background: rgba(255,255,255,0.55); }
+  .tab-item.active{
+    background: var(--paper);
+    color: var(--ink);
+    font-weight:700;
+    border-color: var(--ink);
+    box-shadow: 2px 2px 0 rgba(59,50,38,0.18);
+  }
+  .tab-item .del-tab{ opacity:0; font-size:12px; color:var(--ink-soft); cursor:pointer; padding:2px 5px; }
+  .tab-item:hover .del-tab{ opacity:0.55; }
+  .tab-item .del-tab:hover{ opacity:1; color:var(--terracotta); }
+  .tab-item .share-tab{ opacity:0; font-size:12.5px; color:var(--ink-soft); cursor:pointer; padding:2px 4px; }
+  .tab-item:hover .share-tab{ opacity:0.55; }
+  .tab-item .share-tab:hover{ opacity:1; color:var(--dusty); }
+  .tab-item .shared-badge{ font-size:11px; flex-shrink:0; }
+
+  .add-tab-btn{
+    margin-top:4px;
+    display:flex; align-items:center; justify-content:center; gap:6px;
+    padding:9px; border-radius:12px;
+    border: 2px dashed var(--line);
+    color: var(--ink-soft);
+    cursor:pointer; font-size:13px;
+    background:transparent;
+    font-family:'Gowun Dodum',sans-serif;
+  }
+  .add-tab-btn:hover{ border-color: var(--terracotta); color: var(--terracotta); }
+  .section-add-tab-btn{ padding:7px 10px; font-size:12.5px; margin-top:0; }
+  .add-section-btn{ margin-top:2px; }
+
+  /* ---------- editor pane ---------- */
+  .editor-pane{ flex:1; display:flex; flex-direction:column; overflow:hidden; }
+
+  .toolbar{
+    display:flex; align-items:center; gap:4px; flex-wrap:wrap;
+    padding: 8px 22px;
+    background: rgba(255,252,245,0.7);
+    border-bottom: 1.5px solid var(--line);
+  }
+  .toolbar button, .toolbar select{
+    border: 1.5px solid transparent; background: transparent;
+    color: var(--ink);
+    padding: 6px 9px;
+    border-radius: 8px;
+    cursor:pointer;
+    font-size:13px;
+    font-family:'Gowun Dodum',sans-serif;
+    transition: background .12s ease;
+  }
+  .toolbar button:hover{ background: rgba(59,50,38,0.07); }
+  .toolbar button.active-state{ background: var(--ink); color:#fff; }
+  .toolbar select{ border-color: var(--line-soft); }
+  .toolbar .sep{ width:1px; height:20px; background:var(--line); margin:0 5px; }
+  .swatches{ display:flex; gap:4px; align-items:center; }
+  .sw{
+    width:18px; height:18px; border-radius:5px; cursor:pointer; border:1.5px solid var(--ink);
+  }
+  .sw.none{ background:var(--paper); position:relative; }
+  .sw.none::after{ content:''; position:absolute; left:1px; right:1px; top:8px; height:2px; background:var(--terracotta); transform:rotate(-30deg); }
+  .color-input{ width:22px;height:22px;border:1.5px solid var(--ink);border-radius:5px;padding:0;cursor:pointer;background:none; }
+  #searchBox{ display:none; align-items:center; gap:6px; padding:6px 12px; background:rgba(255,252,245,0.9); border-bottom:1.5px solid var(--line); }
+  #searchBox input{ border:1.5px solid var(--line); border-radius:8px; padding:5px 10px; font-size:13px; outline:none; font-family:'Gowun Dodum',sans-serif; width:220px; }
+  #searchBox button{ border:1.5px solid var(--line); background:transparent; border-radius:8px; padding:5px 9px; cursor:pointer; font-size:12px; }
+
+  #charCountPopover{
+    display:none; position:fixed; z-index:60;
+    background: var(--paper); border:2px solid var(--ink); border-radius:14px;
+    padding:14px 16px; box-shadow: var(--shadow); min-width:200px;
+  }
+  #charCountPopover .ccp-row{ display:flex; justify-content:space-between; gap:18px; font-size:13.5px; padding:4px 0; color:var(--ink-soft); }
+  #charCountPopover .ccp-row b{ color:var(--ink); font-family:'Nanum Gothic',sans-serif; }
+  #charCountPopover button{ margin-top:8px; width:100%; border:1.5px solid var(--line); background:transparent; border-radius:9px; padding:5px; cursor:pointer; font-size:12px; color:var(--ink-soft); }
+  #charCountPopover button:hover{ border-color:var(--ink); color:var(--ink); }
+
+  .doc-scroll{ flex:1; overflow-y:auto; padding: 26px 0 60px; }
+  .doc-wrap{ max-width: 780px; margin: 0 auto; padding: 0 42px; }
+  .tab-title{
+    font-family:'Caveat', sans-serif; font-weight:700;
+    font-size:38px;
+    border:none; outline:none; background:transparent;
+    color: var(--ink); width:100%; margin-bottom: 4px;
+    padding: 4px 2px;
+  }
+  .tab-title::placeholder{ color: rgba(59,50,38,0.3); }
+  .tab-meta{ font-size:12px; color:var(--ink-faint); margin-bottom:18px; padding:0 2px; }
+
+  .outline{ display:flex; flex-direction:column; }
+  .row{ display:flex; align-items:flex-start; gap:4px; padding: 2px 6px; border-radius: 8px; position:relative; }
+  .row:hover{ background: rgba(59,50,38,0.035); }
+  .row .gutter{ display:flex; align-items:center; gap:2px; padding-top:5px; flex-shrink:0; user-select:none; }
+  .row .toggle{ width:15px; height:15px; display:flex; align-items:center; justify-content:center; cursor:pointer; color: var(--ink-soft); font-size:9px; transition: transform .15s ease; }
+  .row .toggle.no-children{ visibility:hidden; }
+  .row.collapsed > .gutter .toggle{ transform: rotate(-90deg); }
+  .row .bullet{ width:6px; height:6px; border-radius:50%; background: var(--ink-soft); margin: 7px 5px 0 2px; flex-shrink:0; }
+  .row[data-type="bullet"] .marker{ font-size:15px; color:var(--ink-soft); margin-top:2px; width:16px; text-align:center; flex-shrink:0; }
+  .row[data-type="ordered"] .marker{ font-size:14.5px; color:var(--ink-soft); margin-top:3px; min-width:22px; text-align:right; flex-shrink:0; font-family:'Nanum Gothic',sans-serif; }
+  .row[data-type="todo"] .marker{ margin-top:4px; flex-shrink:0; cursor:pointer; }
+  .row[data-type="todo"] .marker input{ width:16px;height:16px; accent-color: var(--terracotta); cursor:pointer; }
+  .row[data-type="todo"].checked .content{ color:var(--ink-faint); text-decoration: line-through; }
+  .row .content{ flex:1; outline:none; padding: 4px 4px; font-size:16px; line-height:1.7; min-height: 24px; color: var(--ink); word-break: break-word; }
+  .row .content:empty:before{ content: attr(data-placeholder); color: rgba(59,50,38,0.28); }
+  .row .content a{ color: var(--linkblue) !important; text-decoration:underline !important; cursor:pointer; }
+  .row .content code.inline-code{ background: rgba(59,50,38,0.08); border:1px solid var(--line-soft); border-radius:5px; padding:1px 6px; font-family:'Courier New',monospace; font-size:14px; }
+  .row .content table{ border-collapse:collapse; margin:8px 0; width:100%; }
+  .row .content table td, .row .content table th{ border:1.5px solid var(--ink); padding:7px 10px; font-size:14.5px; min-width:70px; }
+  .row .content table th{ background: rgba(59,50,38,0.06); }
+  .row .content img{ max-width:100%; border-radius:8px; border:2px solid var(--ink); margin:6px 0; }
+  .row .content hr{ border:none; border-top:2px dashed var(--line); margin:10px 0; }
+  .row .content::after{ content:''; display:table; clear:both; }
+
+  .img-embed{ position:relative; display:block; max-width:100%; margin:8px 0; }
+  .img-embed[data-align="left"]{ float:left; display:inline-block; max-width:58%; margin:6px 16px 10px 0; }
+  .img-embed[data-align="right"]{ float:right; display:inline-block; max-width:58%; margin:6px 0 10px 16px; }
+  .img-embed[data-align="center"]{ float:none; margin:10px auto; width:fit-content; }
+  .img-embed[data-align="block"]{ float:none; width:100%; margin:8px 0; }
+  .img-embed img{ display:block; width:100%; max-width:100%; height:auto; border-radius:8px; border:2px solid var(--ink); margin:0; pointer-events:none; user-select:none; }
+  .img-embed .img-toolbar{
+    position:absolute; top:-32px; left:0; display:none; gap:3px;
+    background:var(--paper); border:1.5px solid var(--ink); border-radius:9px; padding:3px; z-index:5;
+  }
+  .img-embed:hover .img-toolbar{ display:flex; }
+  .img-embed .img-toolbar button{
+    border:none; background:transparent; cursor:pointer; font-size:12px; padding:3px 6px; border-radius:6px; color:var(--ink-soft);
+  }
+  .img-embed .img-toolbar button:hover{ background:rgba(59,50,38,0.08); color:var(--ink); }
+  .img-embed .img-resize-handle{
+    position:absolute; width:13px; height:13px; right:-5px; bottom:-5px;
+    background:var(--terracotta); border:2px solid #fff; border-radius:50%;
+    cursor:nwse-resize; display:none; box-shadow:0 1px 3px rgba(0,0,0,0.25);
+  }
+  .img-embed:hover .img-resize-handle{ display:block; }
+  .row .collapsed-badge{ font-size:11px; color:var(--ink-soft); background:rgba(59,50,38,0.06); border-radius:8px; padding:1px 7px; margin-left:6px; margin-top:5px; flex-shrink:0; }
+
+  .row[data-type="h1"] .content{ font-family:'Jua',sans-serif; font-size:25px; padding-top:10px; }
+  .row[data-type="h2"] .content{ font-family:'Jua',sans-serif; font-size:20px; padding-top:8px; }
+  .row[data-type="h3"] .content{ font-family:'Jua',sans-serif; font-size:17px; padding-top:6px; color:var(--terracotta); }
+  .row[data-type="quote"]{ border-left: 3px solid var(--terracotta); background: rgba(193,101,63,0.05); margin: 3px 0; border-radius: 0 8px 8px 0; }
+  .row[data-type="quote"] .content{ font-style:italic; color: var(--ink-soft); }
+  .row[data-type="code"] .content{ font-family:'Courier New',monospace; background: rgba(59,50,38,0.07); border-radius:8px; padding:8px 10px; font-size:14px; }
+
+  mark.search-hit{ background: var(--mustard); border-radius:3px; }
+
+  .footer-bar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 7px 26px; font-size:11.5px; color:var(--ink-faint);
+    border-top:1.5px solid var(--line-soft); background: rgba(255,252,245,0.6);
+  }
+
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-thumb{ background: rgba(59,50,38,0.2); border-radius: 6px; }
+  ::-webkit-scrollbar-thumb:hover{ background: rgba(59,50,38,0.32); }
+
+  .toast{
+    position:fixed; bottom:26px; left:50%; transform: translateX(-50%) translateY(20px);
+    background: var(--ink); color:#fff; padding:9px 18px; border-radius:12px;
+    font-size:13px; opacity:0; pointer-events:none; transition: all .25s ease; z-index:50;
+  }
+  .toast.show{ opacity:1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="brush-wash">
+  <div class="swash s1"></div>
+  <div class="swash s2"></div>
+  <div class="swash s3"></div>
+  <div class="swash s4"></div>
+</div>
+<div class="noise"></div>
+
+<!-- FIREBASE SETUP (only shown when opened outside Claude / no storage configured yet) -->
+<div id="setupScreen" style="display:none;">
+  <div class="login-card setup-card">
+    <div class="brand-mark">🔥</div>
+    <h1 class="login-title" style="font-size:32px;">저장소 연결하기</h1>
+    <p class="login-sub" style="text-align:left; margin-top:14px;">
+      다운로드해서 쓰는 버전이라 기기·창 사이에 내용을 동기화하려면<br>
+      무료 Firebase 프로젝트를 하나 연결해야 해요. (한 번만 하면 돼요)
+    </p>
+    <ol class="setup-steps">
+      <li><a href="https://console.firebase.google.com/" target="_blank">Firebase 콘솔</a>에서 새 프로젝트 만들기</li>
+      <li>왼쪽 메뉴 <b>빌드 → Realtime Database</b> → 데이터베이스 만들기 → <b>테스트 모드</b>로 시작</li>
+      <li>왼쪽 메뉴 <b>빌드 → Authentication</b> → Sign-in method → <b>이메일/비밀번호</b> 사용 설정 (회원가입·로그인에 필요해요)</li>
+      <li>⚙️ 프로젝트 설정 → 내 앱 → <b>웹 앱 추가(&lt;/&gt;)</b> → 나오는 코드 전체 복사 (import 문 포함해도 괜찮아요)</li>
+      <li>아래 칸에 복사한 걸 그대로 붙여넣고 저장하기</li>
+    </ol>
+    <textarea id="fbConfigInput" placeholder='{
+  "apiKey": "...",
+  "authDomain": "...",
+  "projectId": "...",
+  "storageBucket": "...",
+  "messagingSenderId": "...",
+  "appId": "..."
+}'></textarea>
+    <button id="fbSaveBtn">저장하고 계속하기</button>
+    <button id="fbSkipBtn" class="ghost-btn">일단 이 기기에서만 쓸게요</button>
+    <p class="login-hint">이 설정은 지금 쓰는 브라우저에만 저장돼요. 다른 기기에서도 동기화하려면 그 기기에서도 같은 정보를 한 번 붙여넣어 주세요.</p>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <!-- Firebase 프로젝트가 연결된 경우: 이메일/비밀번호 회원가입·로그인 -->
+  <div class="login-card" id="authCard" style="display:none;">
+    <div class="brand-mark">🖋️</div>
+    <h1 class="login-title">탐구노트
+      <svg viewBox="0 0 200 14" preserveAspectRatio="none"><path d="M2 8 Q 30 2, 55 8 T 105 7 T 155 9 T 198 6" stroke="#C1653F" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
+    </h1>
+    <p class="login-sub">자료를 찾고, 조사하고, 알게 된 것을 기록하는<br>나만의 리서치 캔버스</p>
+
+    <div class="auth-tabs">
+      <button type="button" class="auth-tab-btn active" data-auth-mode="login">로그인</button>
+      <button type="button" class="auth-tab-btn" data-auth-mode="signup">회원가입</button>
+    </div>
+
+    <form id="loginForm" class="auth-form">
+      <input id="loginEmail" type="email" placeholder="이메일" autocomplete="username" required />
+      <input id="loginPassword" type="password" placeholder="비밀번호" autocomplete="current-password" required />
+      <button type="submit">로그인</button>
+    </form>
+    <p class="login-hint" id="loginHintText"><span id="forgotPwLink" style="text-decoration:underline; cursor:pointer;">비밀번호를 잊으셨나요?</span></p>
+
+    <form id="signupForm" class="auth-form" style="display:none;">
+      <input id="signupName" type="text" placeholder="이름(닉네임)" maxlength="20" required />
+      <input id="signupEmail" type="email" placeholder="이메일" autocomplete="username" required />
+      <input id="signupPassword" type="password" placeholder="비밀번호 (6자 이상)" autocomplete="new-password" required />
+      <button type="submit">회원가입</button>
+    </form>
+
+    <p class="login-hint"><span id="fbEditLink2" style="text-decoration:underline; cursor:pointer;">저장소 설정 변경</span></p>
+  </div>
+
+  <!-- Firebase가 연결되지 않은 경우: 이름만 입력하는 간단 모드 -->
+  <div class="login-card" id="simpleLoginCard" style="display:none;">
+    <div class="brand-mark">🖋️</div>
+    <h1 class="login-title">탐구노트
+      <svg viewBox="0 0 200 14" preserveAspectRatio="none"><path d="M2 8 Q 30 2, 55 8 T 105 7 T 155 9 T 198 6" stroke="#C1653F" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
+    </h1>
+    <p class="login-sub">자료를 찾고, 조사하고, 알게 된 것을 기록하는<br>나만의 리서치 캔버스</p>
+    <input id="nameInput" type="text" placeholder="이름을 적어주세요" maxlength="20" />
+    <button id="loginBtn">노트 펼치기</button>
+    <p class="login-hint" id="storageModeHint">같은 이름으로 다시 오면 쓰던 내용이 그대로 있어요</p>
+    <p class="login-hint"><span id="fbEditLink" style="text-decoration:underline; cursor:pointer;">저장소 설정 변경</span></p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <header class="topbar">
+    <div class="brand">🖋️ 탐구노트</div>
+    <div class="user-chip">
+      <div class="save-status" id="saveStatus"><span class="sdot"></span><span id="saveStatusText">저장됨</span></div>
+      <button class="logout-btn" id="syncBtn" title="다른 창의 최신 내용 불러오기">🔄 동기화</button>
+      <div class="avatar" id="avatarInitial">?</div>
+      <span id="userNameLabel"></span>
+      <button class="logout-btn" id="logoutBtn">나가기</button>
+    </div>
+  </header>
+
+  <div class="main-area">
+    <div class="tab-rail" id="tabRail"></div>
+
+    <div class="editor-pane">
+      <div class="toolbar">
+        <button data-cmd="undo" title="실행취소">↺</button>
+        <button data-cmd="redo" title="다시실행">↻</button>
+        <div class="sep"></div>
+        <select id="blockTypeSelect" title="문단 스타일">
+          <option value="text">본문</option>
+          <option value="h1">제목 1</option>
+          <option value="h2">제목 2</option>
+          <option value="h3">제목 3</option>
+          <option value="quote">인용구</option>
+          <option value="code">코드 블록</option>
+        </select>
+        <div class="sep"></div>
+        <button data-cmd="bold" title="굵게 (Ctrl+B)"><b>B</b></button>
+        <button data-cmd="italic" title="기울임 (Ctrl+I)"><i>I</i></button>
+        <button data-cmd="underline" title="밑줄"><u>U</u></button>
+        <button data-cmd="strikeThrough" title="취소선"><s>S</s></button>
+        <button id="inlineCodeBtn" title="인라인 코드">&lt;/&gt;</button>
+        <div class="sep"></div>
+        <select id="fontSelect" title="글씨체">
+          <option value="'Gowun Dodum', sans-serif">둥근 손글씨</option>
+          <option value="'Gaegu', sans-serif">개구쟁이체</option>
+          <option value="'Jua', sans-serif">주아체</option>
+          <option value="'Nanum Pen Script', cursive">펜글씨</option>
+          <option value="'Gowun Batang', serif">고운바탕</option>
+          <option value="'Song Myung', serif">명조체</option>
+          <option value="'Nanum Gothic', sans-serif">나눔고딕</option>
+        </select>
+        <select id="sizeSelect" title="글자 크기(pt)">
+          <option value="9">9pt</option>
+          <option value="10">10pt</option>
+          <option value="11" selected>11pt</option>
+          <option value="12">12pt</option>
+          <option value="14">14pt</option>
+          <option value="16">16pt</option>
+          <option value="18">18pt</option>
+          <option value="24">24pt</option>
+          <option value="30">30pt</option>
+          <option value="36">36pt</option>
+        </select>
+        <div class="sep"></div>
+        <span class="swatches" title="글자 색">
+          <input type="color" class="color-input" id="textColorInput" value="#3B3226">
+        </span>
+        <span class="swatches" title="하이라이트">
+          <div class="sw none" data-hl="transparent"></div>
+          <div class="sw" style="background:#F5DE8A" data-hl="#F5DE8A"></div>
+          <div class="sw" style="background:#F2B6A8" data-hl="#F2B6A8"></div>
+          <div class="sw" style="background:#BEDCC4" data-hl="#BEDCC4"></div>
+          <div class="sw" style="background:#BFD6E8" data-hl="#BFD6E8"></div>
+          <div class="sw" style="background:#DCC6E8" data-hl="#DCC6E8"></div>
+        </span>
+        <div class="sep"></div>
+        <button data-cmd="justifyLeft" title="왼쪽 정렬">≡◁</button>
+        <button data-cmd="justifyCenter" title="가운데 정렬">≡○</button>
+        <button data-cmd="justifyRight" title="오른쪽 정렬">≡▷</button>
+        <div class="sep"></div>
+        <button id="linkBtn" title="링크 삽입">🔗</button>
+        <button id="imageBtn" title="이미지 삽입 (파일 업로드)">🖼️</button>
+        <input type="file" id="imageFileInput" accept="image/*" style="display:none">
+        <button id="tableBtn" title="표 삽입">▦</button>
+        <button id="dividerBtn" title="구분선 삽입">— —</button>
+        <button id="clearFormatBtn" title="서식 지우기">✂️</button>
+        <div class="sep"></div>
+        <button id="charCountBtn" title="선택한 부분 글자수 확인">🔤 글자수 체크</button>
+        <button id="spellcheckBtn" title="나라스펠러(외부 사이트)에서 맞춤법 검사하기 — 본문이 클립보드에 복사돼요">✅ 맞춤법 검사</button>
+        <button id="searchToggleBtn" title="찾기">🔎</button>
+      </div>
+
+      <div id="searchBox">
+        <input id="searchInput" type="text" placeholder="이 조사 안에서 찾기..." />
+        <button id="searchPrevBtn">이전</button>
+        <button id="searchNextBtn">다음</button>
+        <button id="searchCloseBtn">닫기</button>
+      </div>
+
+      <div id="charCountPopover">
+        <div class="ccp-row"><span>띄어쓰기 포함</span><b id="ccpWith">0자</b></div>
+        <div class="ccp-row"><span>띄어쓰기 미포함</span><b id="ccpWithout">0자</b></div>
+        <div class="ccp-row"><span>단어수</span><b id="ccpWords">0개</b></div>
+        <button id="ccpCloseBtn">닫기</button>
+      </div>
+
+      <div class="doc-scroll">
+        <div class="doc-wrap">
+          <input class="tab-title" id="tabTitleInput" placeholder="조사 주제를 적어주세요" />
+          <div class="tab-meta" id="tabMeta"></div>
+          <div class="outline" id="outline"></div>
+        </div>
+      </div>
+
+      <div class="footer-bar">
+        <span id="wordCount">0자 · 0단어</span>
+        <span>탭 옆 🔗를 누르면 다른 사람과 공유해서 함께 편집할 수 있어요 · ✅ 맞춤법 검사는 나라스펠러 사이트를 새 창으로 열어드려요</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  const SWATCH_COLORS = ['#C1653F','#7C9473','#6B87A0','#D2A23D','#8C5B7A','#B5533C'];
+  let profile = null;
+  let activeRowId = null;
+  let lastSelectionRange = null;
+
+  const $ = (sel, el) => (el||document).querySelector(sel);
+  const $$ = (sel, el) => Array.from((el||document).querySelectorAll(sel));
+
+  function uid(){ return 'id_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+
+  function showToast(msg){
+    const t = $('#toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(()=>t.classList.remove('show'), 1700);
+  }
+
+  // ---------- storage backend detection ----------
+  // Baked in from the user's own Firebase project, so the setup screen
+  // is skipped entirely. Change these values (or use "저장소 설정 변경"
+  // on the login screen) if you ever need to point this at a different project.
+  const DEFAULT_FIREBASE_CONFIG = {
+    apiKey: "AIzaSyAMmKLNE0Sz2ETy6D1i7dbh2BzWMo1Zezo",
+    authDomain: "research-81b80.firebaseapp.com",
+    databaseURL: "https://research-81b80-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "research-81b80",
+    storageBucket: "research-81b80.firebasestorage.app",
+    messagingSenderId: "439712115803",
+    appId: "1:439712115803:web:eb9a9b002bbb87b168237e"
+  };
+
+  const FB_CONFIG_KEY = 'tamgu-fb-config';
+  const FB_SKIP_KEY = 'tamgu-storage-choice';
+  let STORAGE_MODE = 'local'; // 'claude' | 'firebase' | 'local'
+  let fbDb = null;
+  let fbUnsub = null;
+
+  function getSavedFbConfig(){
+    try{
+      const raw = localStorage.getItem(FB_CONFIG_KEY);
+      if(!raw) return null;
+      const cfg = JSON.parse(raw);
+      if(cfg && cfg.apiKey && cfg.databaseURL) return cfg;
+    }catch(e){}
+    return null;
+  }
+
+  function initFirebase(cfg){
+    try{
+      if(typeof firebase === 'undefined') return false;
+      if(!firebase.apps || firebase.apps.length === 0) firebase.initializeApp(cfg);
+      fbDb = firebase.database();
+      return true;
+    }catch(e){ console.error('Firebase 초기화 실패', e); return false; }
+  }
+
+  function detectStorageMode(){
+    if(window.storage){ STORAGE_MODE = 'claude'; return; }
+    const cfg = getSavedFbConfig() || DEFAULT_FIREBASE_CONFIG;
+    if(cfg && initFirebase(cfg)){ STORAGE_MODE = 'firebase'; return; }
+    STORAGE_MODE = 'local';
+  }
+
+  function docIdFor(name){ return encodeURIComponent(name).replace(/[.#$\[\]]/g, '_').slice(0,300); }
+  function emailKeyFor(email){ return String(email).trim().toLowerCase().replace(/[.#$\[\]\/]/g, '_'); }
+
+  // ---------- storage read/write ----------
+  // `key` is a Firebase Auth uid when logged in via email/password (firebase mode),
+  // or the plain display name typed at the simple login screen (claude / local modes).
+  async function loadProfile(key){
+    try{
+      if(STORAGE_MODE === 'claude'){
+        const res = await window.storage.get('research-profile:' + key, false);
+        return (res && res.value) ? JSON.parse(res.value) : null;
+      }
+      if(STORAGE_MODE === 'firebase'){
+        const snap = await fbDb.ref('tamgu-notes/' + docIdFor(key)).once('value');
+        return snap.exists() ? snap.val() : null;
+      }
+      const raw = localStorage.getItem('tamgu-local:' + key);
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){ console.error('불러오기 실패', e); return null; }
+  }
+
+  function setSaveStatus(state){
+    const el = $('#saveStatus');
+    const txt = $('#saveStatusText');
+    if(state === 'saving'){ el.classList.add('saving'); txt.textContent = '저장 중...'; }
+    else { el.classList.remove('saving'); txt.textContent = '저장됨'; }
+  }
+
+  let lastKnownUpdatedAt = 0;
+
+  async function saveProfile(){
+    if(!profile) return;
+    setSaveStatus('saving');
+    try{
+      profile.updatedAt = Date.now();
+      const key = profile.uid || profile.name;
+      if(STORAGE_MODE === 'claude'){
+        await window.storage.set('research-profile:' + key, JSON.stringify(profile), false);
+      } else if(STORAGE_MODE === 'firebase'){
+        await fbDb.ref('tamgu-notes/' + docIdFor(key)).set(profile);
+        if(profile.uid && profile.email) await writeUserIndex(profile.uid, profile.email, profile.name);
+      } else {
+        localStorage.setItem('tamgu-local:' + key, JSON.stringify(profile));
+      }
+      lastKnownUpdatedAt = profile.updatedAt;
+      setSaveStatus('saved');
+    }catch(e){ console.error('저장 실패', e); setSaveStatus('saved'); showToast('저장에 실패했어요'); }
+  }
+
+  let saveTimer = null;
+  function scheduleSave(){
+    clearTimeout(saveTimer);
+    setSaveStatus('saving');
+    saveTimer = setTimeout(async ()=>{
+      saveTimer = null;
+      await saveProfile();
+      const tab = profile ? getActiveTab() : null;
+      if(tab && tab.shared) await saveSharedTab(tab);
+    }, 600);
+  }
+
+  function isEditingNow(){
+    const el = document.activeElement;
+    return !!(el && el.classList && (el.classList.contains('content') || el.id === 'tabTitleInput'));
+  }
+
+  function applyRemoteProfile(remote, msg){
+    profile = remote;
+    lastKnownUpdatedAt = remote.updatedAt || 0;
+    ensureSections();
+    if(!profile.tabs.find(t=>t.id===profile.activeTabId)) profile.activeTabId = profile.tabs[0].id;
+    renderTabs(); renderEditor();
+    if(msg) showToast(msg);
+  }
+
+  async function syncFromStorage(manual){
+    if(!profile) return;
+    if(!manual && (saveTimer || isEditingNow())) return; // don't clobber unsaved/active edits
+    try{
+      const remote = await loadProfile(profile.uid || profile.name);
+      if(!remote){ if(manual) showToast('저장된 내용이 없어요'); return; }
+      const remoteUpdated = remote.updatedAt || 0;
+      if(remoteUpdated > lastKnownUpdatedAt) applyRemoteProfile(remote, '최신 내용을 불러왔어요');
+      else if(manual) showToast('이미 최신 내용이에요');
+    }catch(e){ if(manual) showToast('동기화에 실패했어요'); }
+  }
+
+  function attachRealtimeListener(){
+    if(STORAGE_MODE !== 'firebase' || !profile) return;
+    detachRealtimeListener();
+    const ref = fbDb.ref('tamgu-notes/' + docIdFor(profile.uid || profile.name));
+    const handler = (snap)=>{
+      if(!snap.exists()) return;
+      const remote = snap.val();
+      const remoteUpdated = remote.updatedAt || 0;
+      if(remoteUpdated <= lastKnownUpdatedAt) return; // ignore echo of our own write
+      if(saveTimer || isEditingNow()) return; // will catch up next time we're idle
+      applyRemoteProfile(remote, '다른 기기·창에서 저장한 내용을 불러왔어요');
+    };
+    ref.on('value', handler, (err)=> console.error('실시간 동기화 오류', err));
+    fbUnsub = ()=> ref.off('value', handler);
+  }
+  function detachRealtimeListener(){ if(fbUnsub){ fbUnsub(); fbUnsub = null; } }
+
+  // ---------- email -> uid index (so sharing can look someone up without a backend) ----------
+  async function writeUserIndex(uidVal, email, name){
+    if(STORAGE_MODE !== 'firebase' || !email) return;
+    try{ await fbDb.ref('tamgu-users-index/' + emailKeyFor(email)).set({ uid: uidVal, name: name || '' }); }
+    catch(e){ console.error('사용자 색인 저장 실패', e); }
+  }
+
+  // ---------- note sharing ----------
+  async function writeSharedNode(shareId, payload){
+    if(STORAGE_MODE === 'firebase'){
+      await fbDb.ref('tamgu-shared/' + shareId).set(payload);
+    } else if(STORAGE_MODE === 'claude'){
+      await window.storage.set('tamgu-shared:' + shareId, JSON.stringify(payload), true);
+    } else {
+      throw new Error('공유는 Firebase 또는 Claude 저장소가 있어야 가능해요');
+    }
+  }
+
+  async function readSharedNode(shareId){
+    try{
+      if(STORAGE_MODE === 'firebase'){
+        const snap = await fbDb.ref('tamgu-shared/' + shareId).once('value');
+        return snap.exists() ? snap.val() : null;
+      }
+      if(STORAGE_MODE === 'claude'){
+        const res = await window.storage.get('tamgu-shared:' + shareId, true);
+        return (res && res.value) ? JSON.parse(res.value) : null;
+      }
+    }catch(e){ console.error('공유 노트 불러오기 실패', e); }
+    return null;
+  }
+
+  async function writeInboxEntry(recipientKey, shareId, title, fromName){
+    const entry = { shareId, fromName, title: title || '제목 없는 조사', sharedAt: Date.now() };
+    if(STORAGE_MODE === 'firebase'){
+      await fbDb.ref('tamgu-inbox/' + docIdFor(recipientKey) + '/' + shareId).set(entry);
+    } else if(STORAGE_MODE === 'claude'){
+      const key = 'tamgu-inbox:' + recipientKey;
+      let list = [];
+      try{ const res = await window.storage.get(key, true); if(res && res.value) list = JSON.parse(res.value); }catch(e){}
+      list.push(entry);
+      await window.storage.set(key, JSON.stringify(list), true);
+    }
+  }
+
+  async function saveSharedTab(tab){
+    if(!tab || !tab.shared) return;
+    try{
+      const updatedAt = Date.now();
+      const payload = {
+        title: tab.title || '',
+        blocks: tab.blocks,
+        color: tab.color,
+        owner: tab.shared.owner,
+        collaborators: tab.shared.collaborators,
+        updatedAt
+      };
+      await writeSharedNode(tab.shared.shareId, payload);
+      tab._lastKnownUpdatedAt = updatedAt;
+    }catch(e){ console.error('공유 노트 저장 실패', e); }
+  }
+
+  async function shareTab(tab){
+    if(STORAGE_MODE === 'local'){
+      showToast('공유하려면 먼저 저장소(Firebase)를 연결해주세요');
+      return;
+    }
+
+    let recipientKey, recipientLabel;
+    if(STORAGE_MODE === 'firebase'){
+      const emailInput = prompt('누구와 이 조사를 공유할까요? 상대방의 가입 이메일을 입력해주세요');
+      if(!emailInput) return;
+      const email = emailInput.trim().toLowerCase();
+      if(!email) return;
+      if(profile.email && email === profile.email.toLowerCase()){ showToast('본인과는 공유할 수 없어요'); return; }
+      let idxSnap;
+      try{ idxSnap = await fbDb.ref('tamgu-users-index/' + emailKeyFor(email)).once('value'); }
+      catch(e){ showToast('사용자를 찾는 데 실패했어요'); return; }
+      if(!idxSnap.exists()){ showToast('해당 이메일로 가입한 사용자를 찾을 수 없어요'); return; }
+      recipientKey = idxSnap.val().uid;
+      recipientLabel = idxSnap.val().name || email;
+    } else {
+      const input = prompt('누구와 이 조사를 공유할까요? 상대방이 쓰는 이름을 적어주세요');
+      if(!input) return;
+      recipientKey = input.trim();
+      if(!recipientKey) return;
+      if(recipientKey === profile.name){ showToast('본인과는 공유할 수 없어요'); return; }
+      recipientLabel = recipientKey;
+    }
+
+    let shareId, collaborators, owner;
+    if(tab.shared){
+      shareId = tab.shared.shareId;
+      owner = tab.shared.owner;
+      collaborators = Array.from(new Set([...(tab.shared.collaborators||[]), recipientLabel]));
+    } else {
+      shareId = uid();
+      owner = profile.name;
+      collaborators = [profile.name, recipientLabel];
+    }
+
+    try{
+      const updatedAt = Date.now();
+      await writeSharedNode(shareId, {
+        title: tab.title || '', blocks: tab.blocks, color: tab.color,
+        owner, collaborators, updatedAt
+      });
+      await writeInboxEntry(recipientKey, shareId, tab.title, profile.name);
+      tab.shared = { shareId, owner, collaborators };
+      tab._lastKnownUpdatedAt = updatedAt;
+      renderTabs();
+      scheduleSave();
+      showToast(recipientLabel + '님에게 공유했어요');
+    }catch(e){
+      console.error(e);
+      showToast('공유에 실패했어요');
+    }
+  }
+
+  async function processIncomingShare(entry){
+    if(!entry || !entry.shareId || !profile) return;
+    if(profile.tabs.find(t => t.shared && t.shared.shareId === entry.shareId)) return; // already added
+    const fresh = await readSharedNode(entry.shareId);
+    ensureSections();
+    const stub = {
+      id: uid(),
+      name: entry.title || '공유된 조사',
+      color: (fresh && fresh.color) || SWATCH_COLORS[Math.floor(Math.random()*SWATCH_COLORS.length)],
+      title: (fresh && fresh.title) || entry.title || '',
+      createdAt: new Date().toISOString().slice(0,10),
+      sectionId: profile.sections[0].id,
+      blocks: (fresh && fresh.blocks) || [ newBlock(0,'text','') ],
+      shared: {
+        shareId: entry.shareId,
+        owner: (fresh && fresh.owner) || entry.fromName,
+        collaborators: (fresh && fresh.collaborators) || [entry.fromName, profile.name]
+      },
+      _lastKnownUpdatedAt: (fresh && fresh.updatedAt) || 0
+    };
+    profile.tabs.push(stub);
+    renderTabs();
+    scheduleSave();
+    showToast((entry.fromName || '상대방') + '님이 "' + (stub.title || '제목 없는 조사') + '" 노트를 공유했어요 — 함께 편집할 수 있어요');
+  }
+
+  let inboxUnsub = null;
+  function attachInboxListener(){
+    if(!profile) return;
+    detachInboxListener();
+    if(STORAGE_MODE === 'firebase'){
+      const ref = fbDb.ref('tamgu-inbox/' + docIdFor(profile.uid || profile.name));
+      const handler = (snap)=>{
+        const key = snap.key;
+        const entry = snap.val();
+        processIncomingShare(entry).then(()=> ref.child(key).remove());
+      };
+      ref.on('child_added', handler);
+      inboxUnsub = ()=> ref.off('child_added', handler);
+    }
+    // claude-mode inbox is checked via checkInboxPollClaude() on the regular poll interval
+  }
+  function detachInboxListener(){ if(inboxUnsub){ inboxUnsub(); inboxUnsub = null; } }
+
+  async function checkInboxPollClaude(){
+    if(STORAGE_MODE !== 'claude' || !profile) return;
+    try{
+      const key = 'tamgu-inbox:' + profile.name;
+      const res = await window.storage.get(key, true);
+      if(!res || !res.value) return;
+      const list = JSON.parse(res.value);
+      if(!list.length) return;
+      for(const entry of list){ await processIncomingShare(entry); }
+      await window.storage.set(key, JSON.stringify([]), true);
+    }catch(e){}
+  }
+
+  let activeSharedUnsub = null;
+  function attachActiveSharedListener(tab){
+    if(STORAGE_MODE !== 'firebase' || !tab || !tab.shared) return;
+    detachActiveSharedListener();
+    const ref = fbDb.ref('tamgu-shared/' + tab.shared.shareId);
+    const handler = (snap)=>{
+      if(!snap.exists()) return;
+      const remote = snap.val();
+      const remoteUpdated = remote.updatedAt || 0;
+      if(remoteUpdated <= (tab._lastKnownUpdatedAt||0)) return;
+      if(saveTimer || isEditingNow()) return; // will catch up once idle
+      tab.blocks = remote.blocks || tab.blocks;
+      tab.title = remote.title || tab.title;
+      tab.shared.collaborators = remote.collaborators || tab.shared.collaborators;
+      tab._lastKnownUpdatedAt = remoteUpdated;
+      const cur = getActiveTab();
+      if(cur && cur.id === tab.id){ renderTabs(); renderEditor(); showToast('공동 편집자가 방금 수정한 내용을 불러왔어요'); }
+    };
+    ref.on('value', handler, (err)=> console.error('공유 노트 실시간 동기화 오류', err));
+    activeSharedUnsub = ()=> ref.off('value', handler);
+  }
+  function detachActiveSharedListener(){ if(activeSharedUnsub){ activeSharedUnsub(); activeSharedUnsub = null; } }
+
+
+  function newBlock(level, type, html){
+    return { id: uid(), level: level||0, type: type||'text', html: html||'', collapsed:false, checked:false };
+  }
+
+  function newTab(name){
+    return {
+      id: uid(),
+      name: name || '새 조사',
+      color: SWATCH_COLORS[Math.floor(Math.random()*SWATCH_COLORS.length)],
+      title: '',
+      createdAt: new Date().toISOString().slice(0,10),
+      blocks: [ newBlock(0,'text','') ]
+    };
+  }
+
+  function defaultSections(){
+    return [ {id:uid(), name:'연구'}, {id:uid(), name:'수행평가'} ];
+  }
+
+  function makeDefaultProfile(name){
+    const sections = defaultSections();
+    const t = newTab('첫 조사');
+    t.sectionId = sections[0].id;
+    return { name, tabs:[t], activeTabId: t.id, sections };
+  }
+
+  // ensures profile.sections exists and every tab points at a valid section
+  function ensureSections(){
+    if(!profile.sections || !profile.sections.length){ profile.sections = defaultSections(); }
+    const fallbackId = profile.sections[0].id;
+    const validIds = new Set(profile.sections.map(s=>s.id));
+    profile.tabs.forEach(t=>{ if(!t.sectionId || !validIds.has(t.sectionId)) t.sectionId = fallbackId; });
+  }
+
+  // ---------- setup screen (Firebase config) ----------
+  function showAppropriateLoginCard(){
+    if(STORAGE_MODE === 'firebase'){
+      $('#authCard').style.display = 'block';
+      $('#simpleLoginCard').style.display = 'none';
+    } else {
+      $('#authCard').style.display = 'none';
+      $('#simpleLoginCard').style.display = 'block';
+    }
+  }
+
+  function updateStorageModeHint(){
+    const hint = $('#storageModeHint');
+    const link = $('#fbEditLink');
+    if(STORAGE_MODE === 'claude'){
+      hint.textContent = '같은 이름으로 다시 오면 쓰던 내용이 그대로 있어요';
+      link.style.display = 'none';
+    } else if(STORAGE_MODE === 'firebase'){
+      hint.textContent = 'Firebase 계정으로 로그인하면 다른 기기·브라우저에서도 이어서 쓸 수 있어요';
+      link.style.display = 'inline';
+    } else {
+      hint.textContent = '지금은 이 브라우저에만 저장돼요 (다른 기기와는 동기화되지 않아요)';
+      link.style.display = 'inline';
+    }
+  }
+
+  function showSetupScreen(){
+    const cfg = getSavedFbConfig();
+    $('#fbConfigInput').value = cfg ? JSON.stringify(cfg, null, 2) : '';
+    $('#setupScreen').style.display = 'flex';
+    $('#loginScreen').style.display = 'none';
+  }
+  function hideSetupScreen(){
+    $('#setupScreen').style.display = 'none';
+    $('#loginScreen').style.display = 'flex';
+    updateStorageModeHint();
+    showAppropriateLoginCard();
+  }
+
+  function extractFirebaseConfig(raw){
+    // 1) try plain JSON first
+    try{ const j = JSON.parse(raw); if(j && typeof j==='object') return j; }catch(e){}
+    // 2) fall back to pulling out the {...} object literal (handles the full
+    //    snippet copied straight from the Firebase console, unquoted keys and all)
+    const match = raw.match(/\{[\s\S]*\}/);
+    if(!match) return null;
+    try{
+      const obj = (new Function('return (' + match[0] + ');'))();
+      if(obj && typeof obj === 'object') return obj;
+    }catch(e){}
+    return null;
+  }
+
+  $('#fbSaveBtn').addEventListener('click', ()=>{
+    let raw = $('#fbConfigInput').value.trim();
+    if(!raw){ showToast('설정 내용을 붙여넣어주세요'); return; }
+    const cfg = extractFirebaseConfig(raw);
+    if(!cfg){ showToast('형식을 확인해주세요'); return; }
+    if(!cfg.apiKey || !cfg.projectId){ showToast('apiKey와 projectId가 포함되어 있는지 확인해주세요'); return; }
+    localStorage.setItem(FB_CONFIG_KEY, JSON.stringify(cfg));
+    localStorage.removeItem(FB_SKIP_KEY);
+    if(initFirebase(cfg)){
+      STORAGE_MODE = 'firebase';
+      initAuthListener();
+      showToast('Firebase에 연결됐어요');
+      hideSetupScreen();
+    } else {
+      showToast('연결에 실패했어요. 설정 내용을 다시 확인해주세요');
+    }
+  });
+  $('#fbSkipBtn').addEventListener('click', ()=>{
+    localStorage.setItem(FB_SKIP_KEY, 'skipped');
+    STORAGE_MODE = 'local';
+    hideSetupScreen();
+  });
+  $('#fbEditLink').addEventListener('click', showSetupScreen);
+  $('#fbEditLink2').addEventListener('click', showSetupScreen);
+
+  // ---------- simple (no-password) login: used only in claude / local modes ----------
+  async function doLogin(){
+    const name = $('#nameInput').value.trim();
+    if(!name){ showToast('이름을 입력해주세요'); return; }
+    let p = await loadProfile(name);
+    if(!p){ p = makeDefaultProfile(name); p.updatedAt = Date.now(); }
+    profile = p;
+    lastKnownUpdatedAt = profile.updatedAt || 0;
+    $('#loginScreen').style.display = 'none';
+    $('#app').classList.add('active');
+    $('#userNameLabel').textContent = profile.name;
+    $('#avatarInitial').textContent = profile.name.slice(0,1);
+    if(!profile.tabs.find(t=>t.id===profile.activeTabId)) profile.activeTabId = profile.tabs[0].id;
+    ensureSections();
+    startSyncPolling();
+    await switchToTab(profile.activeTabId);
+  }
+  $('#loginBtn').addEventListener('click', doLogin);
+  $('#nameInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doLogin(); });
+
+  // ---------- Firebase Authentication (email / password) login: used in firebase mode ----------
+  function switchAuthMode(mode){
+    $$('.auth-tab-btn').forEach(b=> b.classList.toggle('active', b.dataset.authMode === mode));
+    $('#loginForm').style.display = mode === 'login' ? 'flex' : 'none';
+    $('#loginHintText').style.display = mode === 'login' ? 'block' : 'none';
+    $('#signupForm').style.display = mode === 'signup' ? 'flex' : 'none';
+  }
+  $$('.auth-tab-btn').forEach(b=> b.addEventListener('click', ()=> switchAuthMode(b.dataset.authMode)));
+
+  function authErrorMessage(err){
+    const map = {
+      'auth/email-already-in-use': '이미 가입된 이메일이에요',
+      'auth/invalid-email': '이메일 형식을 확인해주세요',
+      'auth/weak-password': '비밀번호는 6자 이상으로 만들어주세요',
+      'auth/user-not-found': '가입되지 않은 이메일이에요',
+      'auth/wrong-password': '비밀번호가 맞지 않아요',
+      'auth/invalid-credential': '이메일 또는 비밀번호가 맞지 않아요',
+      'auth/too-many-requests': '시도가 너무 많아요. 잠시 후 다시 시도해주세요'
+    };
+    return (err && map[err.code]) || '문제가 발생했어요. 다시 시도해주세요';
+  }
+
+  let pendingSignupName = null;
+
+  $('#signupForm').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const name = $('#signupName').value.trim();
+    const email = $('#signupEmail').value.trim();
+    const password = $('#signupPassword').value;
+    if(!name){ showToast('이름을 입력해주세요'); return; }
+    pendingSignupName = name;
+    try{
+      const cred = await firebase.auth().createUserWithEmailAndPassword(email, password);
+      try{ await cred.user.updateProfile({ displayName: name }); }catch(e2){}
+    }catch(err){ pendingSignupName = null; showToast(authErrorMessage(err)); }
+  });
+
+  $('#loginForm').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const email = $('#loginEmail').value.trim();
+    const password = $('#loginPassword').value;
+    try{
+      await firebase.auth().signInWithEmailAndPassword(email, password);
+    }catch(err){ showToast(authErrorMessage(err)); }
+  });
+
+  $('#forgotPwLink').addEventListener('click', async ()=>{
+    const email = ($('#loginEmail').value || '').trim();
+    if(!email){ showToast('이메일을 먼저 입력해주세요'); return; }
+    try{ await firebase.auth().sendPasswordResetEmail(email); showToast('비밀번호 재설정 메일을 보냈어요'); }
+    catch(err){ showToast(authErrorMessage(err)); }
+  });
+
+  async function enterApp(user, seedName){
+    let p = await loadProfile(user.uid);
+    if(!p){
+      p = makeDefaultProfile(seedName || user.displayName || (user.email||'').split('@')[0] || '탐구노트');
+      p.updatedAt = Date.now();
+    }
+    p.uid = user.uid;
+    p.email = user.email;
+    profile = p;
+    lastKnownUpdatedAt = profile.updatedAt || 0;
+    $('#loginScreen').style.display = 'none';
+    $('#app').classList.add('active');
+    $('#userNameLabel').textContent = profile.name;
+    $('#avatarInitial').textContent = (profile.name || '?').slice(0,1);
+    if(!profile.tabs.find(t=>t.id===profile.activeTabId)) profile.activeTabId = profile.tabs[0].id;
+    ensureSections();
+    await writeUserIndex(profile.uid, profile.email, profile.name);
+    startSyncPolling();
+    await switchToTab(profile.activeTabId);
+  }
+
+  function initAuthListener(){
+    firebase.auth().onAuthStateChanged(async (user)=>{
+      if(user){
+        if(profile && profile.uid === user.uid) return;
+        const seedName = pendingSignupName;
+        pendingSignupName = null;
+        try{ await enterApp(user, seedName); }
+        catch(e){ console.error(e); showToast('불러오는 데 실패했어요'); }
+      } else if(profile){
+        profile = null;
+        stopSyncPolling();
+        $('#app').classList.remove('active');
+        $('#loginScreen').style.display = 'flex';
+        $('#loginEmail').value = '';
+        $('#loginPassword').value = '';
+      }
+    });
+  }
+
+  $('#logoutBtn').addEventListener('click', async ()=>{
+    await saveProfile();
+    if(STORAGE_MODE === 'firebase'){
+      stopSyncPolling();
+      try{ await firebase.auth().signOut(); }
+      catch(e){
+        profile = null;
+        $('#app').classList.remove('active');
+        $('#loginScreen').style.display = 'flex';
+      }
+    } else {
+      profile = null;
+      $('#app').classList.remove('active');
+      $('#loginScreen').style.display = 'flex';
+      $('#nameInput').value = '';
+      stopSyncPolling();
+    }
+  });
+
+  $('#syncBtn').addEventListener('click', ()=> syncFromStorage(true));
+
+  let syncInterval = null;
+  function startSyncPolling(){
+    stopSyncPolling();
+    window.addEventListener('focus', onWindowFocusSync);
+    document.addEventListener('visibilitychange', onVisibilityChangeSync);
+    if(STORAGE_MODE === 'claude'){
+      syncInterval = setInterval(()=>{ syncFromStorage(false); checkInboxPollClaude(); }, 4000);
+      checkInboxPollClaude();
+    } else if(STORAGE_MODE === 'firebase'){
+      attachRealtimeListener();
+      attachInboxListener();
+    }
+  }
+  function stopSyncPolling(){
+    if(syncInterval){ clearInterval(syncInterval); syncInterval = null; }
+    window.removeEventListener('focus', onWindowFocusSync);
+    document.removeEventListener('visibilitychange', onVisibilityChangeSync);
+    detachRealtimeListener();
+    detachInboxListener();
+    detachActiveSharedListener();
+  }
+  function onWindowFocusSync(){ syncFromStorage(false); if(STORAGE_MODE==='claude') checkInboxPollClaude(); }
+  function onVisibilityChangeSync(){ if(document.visibilityState === 'visible'){ syncFromStorage(false); if(STORAGE_MODE==='claude') checkInboxPollClaude(); } }
+
+  // ---------- boot ----------
+  detectStorageMode();
+  updateStorageModeHint();
+  showAppropriateLoginCard();
+  if(STORAGE_MODE === 'firebase'){ initAuthListener(); }
+  if(STORAGE_MODE === 'local' && !window.storage && localStorage.getItem(FB_SKIP_KEY) !== 'skipped'){
+    showSetupScreen();
+  }
+
+  // ---------- tabs ----------
+  function getActiveTab(){ return profile.tabs.find(t => t.id === profile.activeTabId); }
+
+  function escapeHtml(str){ const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+  function plainTextOf(html){ const d = document.createElement('div'); d.innerHTML = html || ''; return d.textContent || ''; }
+
+  function renderTabs(){
+    ensureSections();
+    const rail = $('#tabRail');
+    rail.innerHTML = '<div class="rail-label">조사 주제</div>';
+
+    profile.sections.forEach(sec=>{
+      const block = document.createElement('div');
+      block.className = 'section-block';
+
+      const header = document.createElement('div');
+      header.className = 'section-header';
+      header.innerHTML = `<span class="sname">${escapeHtml(sec.name)}</span>
+        <span class="sec-btn" data-sec-rename title="이름 바꾸기">✎</span>
+        <span class="sec-btn" data-sec-del title="섹션 삭제">✕</span>`;
+      $('[data-sec-rename]', header).addEventListener('click', ()=> renameSection(sec.id));
+      $('[data-sec-del]', header).addEventListener('click', ()=> deleteSection(sec.id));
+      block.appendChild(header);
+
+      profile.tabs.filter(t => t.sectionId === sec.id).forEach(tab=>{
+        block.appendChild(buildTabItem(tab));
+      });
+
+      const addBtn = document.createElement('div');
+      addBtn.className = 'add-tab-btn section-add-tab-btn';
+      addBtn.textContent = '＋ 새 조사';
+      addBtn.addEventListener('click', ()=> createTab(sec.id));
+      block.appendChild(addBtn);
+
+      rail.appendChild(block);
+    });
+
+    const addSectionBtn = document.createElement('div');
+    addSectionBtn.className = 'add-tab-btn add-section-btn';
+    addSectionBtn.textContent = '＋ 새 섹션';
+    addSectionBtn.addEventListener('click', addSection);
+    rail.appendChild(addSectionBtn);
+  }
+
+  function buildTabItem(tab){
+    const item = document.createElement('div');
+    item.className = 'tab-item' + (tab.id === profile.activeTabId ? ' active' : '');
+    const sharedBadge = tab.shared ? `<span class="shared-badge" title="${escapeHtml((tab.shared.collaborators||[]).join(', '))}님과 함께 편집 중">👥</span>` : '';
+    item.innerHTML = `<span class="swatch" style="background:${tab.color}"></span>
+      <span class="label">${escapeHtml(tab.title || tab.name || '제목 없는 조사')}</span>
+      ${sharedBadge}
+      <span class="share-tab" title="다른 사람과 공유">🔗</span>
+      <span class="del-tab" title="삭제">✕</span>`;
+    item.addEventListener('click', (e)=>{
+      if(e.target.classList.contains('del-tab') || e.target.classList.contains('share-tab')) return;
+      switchToTab(tab.id);
+    });
+    $('.share-tab', item).addEventListener('click', (e)=>{
+      e.stopPropagation();
+      shareTab(tab);
+    });
+    $('.del-tab', item).addEventListener('click', (e)=>{
+      e.stopPropagation();
+      if(profile.tabs.length <= 1){ showToast('마지막 탭은 남겨둘게요'); return; }
+      if(!confirm('이 조사 탭을 삭제할까요?')) return;
+      detachActiveSharedListener();
+      profile.tabs = profile.tabs.filter(t=>t.id !== tab.id);
+      if(profile.activeTabId === tab.id) profile.activeTabId = profile.tabs[0].id;
+      renderTabs(); renderEditor(); scheduleSave();
+    });
+    return item;
+  }
+
+  function createTab(sectionId){
+    detachActiveSharedListener();
+    const t = newTab();
+    t.sectionId = sectionId || profile.sections[0].id;
+    profile.tabs.push(t);
+    profile.activeTabId = t.id;
+    renderTabs(); renderEditor(); scheduleSave();
+    setTimeout(()=>$('#tabTitleInput').focus(), 50);
+  }
+
+  function addSection(){
+    const name = prompt('새 섹션 이름을 입력해주세요 (예: 연구, 수행평가, 독서기록...)');
+    if(!name || !name.trim()) return;
+    profile.sections.push({ id: uid(), name: name.trim() });
+    renderTabs(); scheduleSave();
+  }
+  function renameSection(id){
+    const sec = profile.sections.find(s=>s.id===id);
+    if(!sec) return;
+    const name = prompt('섹션 이름을 바꿔주세요', sec.name);
+    if(!name || !name.trim()) return;
+    sec.name = name.trim();
+    renderTabs(); scheduleSave();
+  }
+  function deleteSection(id){
+    if(profile.sections.length <= 1){ showToast('마지막 섹션은 남겨둘게요'); return; }
+    const sec = profile.sections.find(s=>s.id===id);
+    if(!sec) return;
+    if(!confirm(`"${sec.name}" 섹션을 삭제할까요? 안에 있던 조사는 다른 섹션으로 옮겨질게요.`)) return;
+    profile.sections = profile.sections.filter(s=>s.id!==id);
+    const fallbackId = profile.sections[0].id;
+    profile.tabs.forEach(t=>{ if(t.sectionId===id) t.sectionId = fallbackId; });
+    renderTabs(); scheduleSave();
+  }
+
+  $('#tabTitleInput').addEventListener('input', (e)=>{
+    const tab = getActiveTab();
+    tab.title = e.target.value;
+    renderTabs(); scheduleSave();
+  });
+
+  async function switchToTab(tabId){
+    detachActiveSharedListener();
+    profile.activeTabId = tabId;
+    renderTabs();
+    const tab = getActiveTab();
+    if(tab && tab.shared){
+      renderEditor(); // show cached content immediately while we refresh
+      try{
+        const fresh = await readSharedNode(tab.shared.shareId);
+        if(fresh && (fresh.updatedAt||0) > (tab._lastKnownUpdatedAt||0)){
+          tab.blocks = fresh.blocks || tab.blocks;
+          tab.title = fresh.title || tab.title;
+          tab.color = fresh.color || tab.color;
+          tab.shared.collaborators = fresh.collaborators || tab.shared.collaborators;
+          tab.shared.owner = fresh.owner || tab.shared.owner;
+          tab._lastKnownUpdatedAt = fresh.updatedAt || tab._lastKnownUpdatedAt;
+          renderTabs(); renderEditor();
+        }
+      }catch(e){ console.error(e); }
+      attachActiveSharedListener(tab);
+    } else {
+      renderEditor();
+    }
+  }
+
+  // ---------- word count ----------
+  function updateWordCount(){
+    const tab = getActiveTab();
+    if(!tab) return;
+    let text = '';
+    tab.blocks.forEach(b=>{ text += (b.html||'').replace(/<[^>]+>/g,' ') + ' '; });
+    text = text.replace(/\s+/g,' ').trim();
+    const chars = text.length;
+    const words = text.length ? text.split(' ').filter(Boolean).length : 0;
+    $('#wordCount').textContent = `${chars}자 · ${words}단어`;
+    $('#tabMeta').textContent = tab.createdAt ? `${tab.createdAt}에 시작한 조사` : '';
+  }
+
+  // ---------- editor rendering ----------
+  function computeOrderedIndex(blocks, idx){
+    const block = blocks[idx];
+    let count = 1;
+    for(let i=idx-1;i>=0;i--){
+      const b = blocks[i];
+      if(b.level < block.level) break;
+      if(b.level === block.level){
+        if(b.type === 'ordered') count++;
+        else break;
+      }
+    }
+    return count;
+  }
+
+  function renderEditor(){
+    const tab = getActiveTab();
+    $('#tabTitleInput').value = tab.title || '';
+    updateWordCount();
+    const outline = $('#outline');
+    outline.innerHTML = '';
+
+    let hideLevel = null;
+    tab.blocks.forEach((block, idx)=>{
+      if(hideLevel !== null){
+        if(block.level > hideLevel) return;
+        else hideLevel = null;
+      }
+      const hasChildren = tab.blocks[idx+1] && tab.blocks[idx+1].level > block.level;
+      if(block.collapsed && hasChildren) hideLevel = block.level;
+
+      const row = document.createElement('div');
+      row.className = 'row' + (block.collapsed ? ' collapsed' : '') + (block.checked ? ' checked' : '');
+      row.dataset.id = block.id;
+      row.dataset.type = block.type;
+      row.style.marginLeft = (block.level * 26) + 'px';
+
+      const gutter = document.createElement('div');
+      gutter.className = 'gutter';
+      const toggle = document.createElement('div');
+      toggle.className = 'toggle ' + (hasChildren ? 'has-children' : 'no-children');
+      toggle.textContent = '▾';
+      toggle.addEventListener('click', ()=>{ block.collapsed = !block.collapsed; renderEditor(); scheduleSave(); });
+      gutter.appendChild(toggle);
+
+      if(block.type === 'bullet'){
+        const marker = document.createElement('div');
+        marker.className = 'marker'; marker.textContent = '•';
+        gutter.appendChild(marker);
+      } else if(block.type === 'ordered'){
+        const marker = document.createElement('div');
+        marker.className = 'marker'; marker.textContent = computeOrderedIndex(tab.blocks, idx) + '.';
+        gutter.appendChild(marker);
+      } else if(block.type === 'todo'){
+        const marker = document.createElement('div');
+        marker.className = 'marker';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.checked = !!block.checked;
+        cb.addEventListener('change', ()=>{ block.checked = cb.checked; renderEditor(); scheduleSave(); });
+        marker.appendChild(cb);
+        gutter.appendChild(marker);
+      }
+      // plain text / heading / quote / code blocks get no marker — clean blank-page look
+
+      const content = document.createElement('div');
+      content.className = 'content';
+      content.contentEditable = 'true';
+      content.dataset.placeholder = placeholderFor(block.type);
+      content.innerHTML = block.html || '';
+      content.dataset.id = block.id;
+
+      content.addEventListener('input', ()=>{
+        content.dataset.softEnter = '';
+        block.html = content.innerHTML;
+        maybeAutoTransform(block, content);
+        updateWordCount();
+        scheduleSave();
+      });
+      content.addEventListener('focus', ()=>{ activeRowId = block.id; syncToolbarState(block); });
+      content.addEventListener('keyup', ()=>{ syncToolbarState(block); });
+      content.addEventListener('mouseup', ()=>{ syncToolbarState(block); });
+      content.addEventListener('keydown', (e)=> handleKeydown(e, block, content));
+      content.addEventListener('paste', (e)=> handlePaste(e, block, content));
+      content.addEventListener('click', (e)=>{
+        const a = e.target.closest('a');
+        if(a){ e.preventDefault(); window.open(a.href, '_blank'); }
+      });
+
+      row.appendChild(gutter);
+      row.appendChild(content);
+
+      if(block.collapsed && hasChildren){
+        let count = 0;
+        for(let j=idx+1; j<tab.blocks.length && tab.blocks[j].level > block.level; j++) count++;
+        const badge = document.createElement('span');
+        badge.className = 'collapsed-badge';
+        badge.textContent = count + '개 접힘';
+        row.appendChild(badge);
+      }
+
+      outline.appendChild(row);
+    });
+  }
+
+  function placeholderFor(type){
+    switch(type){
+      case 'h1': return '큰 제목';
+      case 'h2': return '중간 제목';
+      case 'h3': return '작은 제목';
+      case 'quote': return '인용할 내용을 적어주세요';
+      case 'code': return '코드나 데이터를 붙여넣으세요';
+      case 'todo': return '할 일을 적어주세요';
+      default: return '내용을 적어보세요...';
+    }
+  }
+
+  // ---------- markdown-style auto transform ----------
+  function maybeAutoTransform(block, el){
+    const text = el.textContent;
+    let m;
+    if((m = text.match(/^1\.\s(.*)$/)) && block.type !== 'ordered'){
+      block.type = 'ordered'; block.html = escapeHtml(m[1]);
+      renderEditor(); focusBlock(block.id, false); return;
+    }
+    if((m = text.match(/^-\s(.*)$/)) && block.type !== 'bullet'){
+      block.type = 'bullet'; block.html = escapeHtml(m[1]);
+      renderEditor(); focusBlock(block.id, false); return;
+    }
+    if((m = text.match(/^\*\s(.*)$/)) && block.type !== 'bullet'){
+      block.type = 'bullet'; block.html = escapeHtml(m[1]);
+      renderEditor(); focusBlock(block.id, false); return;
+    }
+    if((m = text.match(/^\[\]\s(.*)$/)) && block.type !== 'todo'){
+      block.type = 'todo'; block.html = escapeHtml(m[1]); block.checked=false;
+      renderEditor(); focusBlock(block.id, false); return;
+    }
+    if((m = text.match(/^#\s(.*)$/)) && block.type !== 'h1'){
+      block.type = 'h1'; block.html = escapeHtml(m[1]);
+      renderEditor(); focusBlock(block.id, false); return;
+    }
+    if((m = text.match(/^##\s(.*)$/)) && block.type !== 'h2'){
+      block.type = 'h2'; block.html = escapeHtml(m[1]);
+      renderEditor(); focusBlock(block.id, false); return;
+    }
+    if((m = text.match(/^###\s(.*)$/)) && block.type !== 'h3'){
+      block.type = 'h3'; block.html = escapeHtml(m[1]);
+      renderEditor(); focusBlock(block.id, false); return;
+    }
+    if((m = text.match(/^>\s(.*)$/)) && block.type !== 'quote'){
+      block.type = 'quote'; block.html = escapeHtml(m[1]);
+      renderEditor(); focusBlock(block.id, false); return;
+    }
+  }
+
+  function getCaretOffset(el){
+    const sel = window.getSelection();
+    if(!sel.rangeCount) return {atStart:true, atEnd:true};
+    const range = sel.getRangeAt(0);
+    const pre = range.cloneRange();
+    pre.selectNodeContents(el);
+    pre.setEnd(range.startContainer, range.startOffset);
+    const atStart = pre.toString().length === 0;
+    const post = range.cloneRange();
+    post.selectNodeContents(el);
+    post.setStart(range.endContainer, range.endOffset);
+    const atEnd = post.toString().length === 0;
+    return {atStart, atEnd};
+  }
+
+  function splitContentAtCaret(el){
+    const sel = window.getSelection();
+    if(!sel.rangeCount) return {before: el.innerHTML, after: ''};
+    const range = sel.getRangeAt(0);
+    const afterRange = range.cloneRange();
+    afterRange.selectNodeContents(el);
+    afterRange.setStart(range.endContainer, range.endOffset);
+    const afterFrag = afterRange.extractContents();
+    const afterDiv = document.createElement('div');
+    afterDiv.appendChild(afterFrag);
+    return { before: el.innerHTML, after: afterDiv.innerHTML };
+  }
+
+  function buildImageEmbedHtml(dataUrl){
+    return '<span class="img-embed" contenteditable="false" data-align="block">'
+      + '<img src="' + dataUrl + '" draggable="false">'
+      + '<span class="img-toolbar">'
+      + '<button type="button" data-align-btn="left" title="왼쪽에 배치 (글이 옆으로 흘러요)">◧</button>'
+      + '<button type="button" data-align-btn="center" title="가운데 배치">▣</button>'
+      + '<button type="button" data-align-btn="right" title="오른쪽에 배치 (글이 옆으로 흘러요)">◨</button>'
+      + '<button type="button" data-align-btn="block" title="전체 너비">▭</button>'
+      + '</span>'
+      + '<span class="img-resize-handle"></span>'
+      + '</span>&#8203;';
+  }
+
+  function readFileAsDataURL(file){
+    return new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = ()=> resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function handlePaste(e, block, el){
+    const items = (e.clipboardData && e.clipboardData.items) || [];
+    let imageFile = null;
+    for(let i=0;i<items.length;i++){
+      if(items[i].type && items[i].type.indexOf('image') === 0){
+        imageFile = items[i].getAsFile();
+        break;
+      }
+    }
+    if(imageFile){
+      e.preventDefault();
+      readFileAsDataURL(imageFile).then(dataUrl=>{
+        document.execCommand('insertHTML', false, buildImageEmbedHtml(dataUrl));
+        block.html = el.innerHTML;
+        updateWordCount();
+        scheduleSave();
+      }).catch(()=> showToast('이미지를 붙여넣는 데 실패했어요'));
+      return;
+    }
+    // plain text / rich text: let the browser paste normally,
+    // then sync the block state on the next tick.
+    setTimeout(()=>{
+      block.html = el.innerHTML;
+      updateWordCount();
+      scheduleSave();
+    }, 0);
+  }
+
+  function stripTrailingBr(html){
+    const d = document.createElement('div');
+    d.innerHTML = html;
+    let last = d.lastChild;
+    while(last && last.nodeType === 3 && last.textContent === ''){ const prev = last.previousSibling; d.removeChild(last); last = prev; }
+    if(last && last.nodeName === 'BR'){ d.removeChild(last); }
+    return d.innerHTML;
+  }
+
+  function handleKeydown(e, block, el){
+    const tab = getActiveTab();
+    const idx = tab.blocks.findIndex(b=>b.id===block.id);
+    const isListType = block.type==='ordered' || block.type==='bullet' || block.type==='todo';
+
+    if(e.key === 'Enter' && !e.shiftKey){
+      e.preventDefault();
+
+      if(isListType){
+        if(el.textContent.trim()===''){
+          block.type = 'text'; block.html='';
+          renderEditor(); scheduleSave(); focusBlock(block.id,false); return;
+        }
+        const {before, after} = splitContentAtCaret(el);
+        block.html = before;
+        const nb = newBlock(block.level, block.type, after);
+        tab.blocks.splice(idx+1, 0, nb);
+        renderEditor(); scheduleSave(); focusBlock(nb.id, true);
+        return;
+      }
+
+      // non-list blocks: first Enter = soft line break (stay in the same box),
+      // a second Enter right after an empty soft-break line = start a new box.
+      if(el.dataset.softEnter === '1'){
+        const {before, after} = splitContentAtCaret(el);
+        const beforeClean = stripTrailingBr(before);
+        block.html = beforeClean;
+        const newType = (block.type==='h1'||block.type==='h2'||block.type==='h3'||block.type==='quote'||block.type==='code') ? 'text' : block.type;
+        const nb = newBlock(block.level, newType, after);
+        tab.blocks.splice(idx+1, 0, nb);
+        renderEditor(); scheduleSave(); focusBlock(nb.id, true);
+        return;
+      }
+
+      document.execCommand('insertLineBreak', false, null);
+      el.dataset.softEnter = '1';
+      block.html = el.innerHTML;
+      updateWordCount();
+      scheduleSave();
+      return;
+    }
+
+    if(e.key === 'Tab'){
+      e.preventDefault();
+      if(e.shiftKey){
+        if(block.level > 0){ block.level -= 1; renderEditor(); scheduleSave(); focusBlock(block.id); }
+      } else {
+        if(idx > 0 && tab.blocks[idx-1].level >= block.level){ block.level += 1; renderEditor(); scheduleSave(); focusBlock(block.id); }
+      }
+      return;
+    }
+
+    if(e.key === 'Backspace'){
+      const {atStart} = getCaretOffset(el);
+      if(atStart && isListType && el.textContent.length===0){
+        e.preventDefault();
+        block.type = 'text'; renderEditor(); scheduleSave(); focusBlock(block.id,false); return;
+      }
+      if(atStart && el.textContent.length === 0 && idx > 0){
+        e.preventDefault();
+        tab.blocks.splice(idx,1);
+        const prev = tab.blocks[idx-1];
+        renderEditor(); scheduleSave(); focusBlock(prev.id, false, true);
+        return;
+      }
+      if(atStart && idx > 0){
+        e.preventDefault();
+        const prev = tab.blocks[idx-1];
+        const mergedLen = (prev.html||'').replace(/<[^>]+>/g,'').length;
+        prev.html = (prev.html||'') + (el.innerHTML||'');
+        tab.blocks.splice(idx,1);
+        renderEditor(); scheduleSave(); focusBlock(prev.id, false, false, mergedLen);
+        return;
+      }
+    }
+
+    if(e.key === 'ArrowUp'){
+      const rows = $$('.content');
+      const cur = rows.findIndex(r=>r.dataset.id===block.id);
+      if(cur > 0){ e.preventDefault(); rows[cur-1].focus(); placeCaretEnd(rows[cur-1]); }
+    }
+    if(e.key === 'ArrowDown'){
+      const rows = $$('.content');
+      const cur = rows.findIndex(r=>r.dataset.id===block.id);
+      if(cur < rows.length-1){ e.preventDefault(); rows[cur+1].focus(); placeCaretEnd(rows[cur+1]); }
+    }
+  }
+
+  function placeCaretEnd(el){
+    el.focus();
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(range);
+  }
+
+  function focusBlock(id, atStart){
+    setTimeout(()=>{
+      const el = $(`.content[data-id="${id}"]`);
+      if(!el) return;
+      el.focus();
+      if(atStart){
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(true);
+        const sel = window.getSelection();
+        sel.removeAllRanges(); sel.addRange(range);
+      } else { placeCaretEnd(el); }
+    }, 0);
+  }
+
+  // ---------- toolbar: block type ----------
+  $('#blockTypeSelect').addEventListener('change', (e)=>{
+    const tab = getActiveTab();
+    const block = tab.blocks.find(b=>b.id===activeRowId);
+    if(!block) return;
+    block.type = e.target.value;
+    renderEditor(); scheduleSave(); focusBlock(block.id,false);
+  });
+
+  function syncToolbarState(block){
+    if(block){ $('#blockTypeSelect').value = ['text','h1','h2','h3','quote','code'].includes(block.type) ? block.type : 'text'; }
+    ['bold','italic','underline','strikeThrough'].forEach(cmd=>{
+      const btn = $(`.toolbar button[data-cmd="${cmd}"]`);
+      if(!btn) return;
+      try{ btn.classList.toggle('active-state', document.queryCommandState(cmd)); }catch(e){}
+    });
+  }
+
+  // ---------- toolbar: inline commands ----------
+  $$('.toolbar button[data-cmd]').forEach(btn=>{
+    btn.addEventListener('mousedown', (e)=>{ e.preventDefault(); });
+    btn.addEventListener('click', ()=>{
+      document.execCommand(btn.dataset.cmd, false, null);
+      syncActiveBlockHtml();
+    });
+  });
+
+  $('#inlineCodeBtn').addEventListener('mousedown', e=>e.preventDefault());
+  $('#inlineCodeBtn').addEventListener('click', ()=>{
+    const sel = window.getSelection();
+    if(!sel.rangeCount || sel.isCollapsed){ showToast('코드로 만들 텍스트를 먼저 선택해주세요'); return; }
+    const range = sel.getRangeAt(0);
+    const code = document.createElement('code');
+    code.className = 'inline-code';
+    try{ range.surroundContents(code); }
+    catch(err){ const frag = range.extractContents(); code.appendChild(frag); range.insertNode(code); }
+    syncActiveBlockHtml();
+  });
+
+  $$('.sw').forEach(sw=>{
+    sw.addEventListener('mousedown', e=>e.preventDefault());
+    sw.addEventListener('click', ()=>{
+      document.execCommand('hiliteColor', false, sw.dataset.hl);
+      syncActiveBlockHtml();
+    });
+  });
+
+  $('#textColorInput').addEventListener('input', (e)=>{
+    document.execCommand('foreColor', false, e.target.value);
+    syncActiveBlockHtml();
+  });
+
+  $('#fontSelect').addEventListener('mousedown', e=>e.stopPropagation());
+  $('#fontSelect').addEventListener('change', (e)=>{
+    document.execCommand('fontName', false, e.target.value);
+    syncActiveBlockHtml();
+  });
+
+  $('#sizeSelect').addEventListener('change', (e)=>{
+    setFontSizePt(e.target.value);
+    syncActiveBlockHtml();
+  });
+
+  function setFontSizePt(pt){
+    document.execCommand('fontSize', false, '7');
+    $$('font[size="7"]').forEach(f=>{
+      f.removeAttribute('size');
+      f.style.fontSize = pt + 'pt';
+    });
+  }
+
+  $('#linkBtn').addEventListener('mousedown', e=>e.preventDefault());
+  $('#linkBtn').addEventListener('click', ()=>{
+    const sel = window.getSelection();
+    if(!sel.rangeCount || sel.toString().length === 0){ showToast('먼저 링크로 만들 텍스트를 드래그해서 선택해주세요'); return; }
+    let url = prompt('연결할 주소를 입력해주세요 (https:// 포함)', 'https://');
+    if(!url) return;
+    if(!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    document.execCommand('createLink', false, url);
+    syncActiveBlockHtml();
+    showToast('링크가 추가됐어요 — 클릭하면 이동해요');
+  });
+
+  $('#imageBtn').addEventListener('mousedown', (e)=>{
+    e.preventDefault();
+    const sel = window.getSelection();
+    if(sel.rangeCount) lastSelectionRange = sel.getRangeAt(0).cloneRange();
+  });
+  $('#imageBtn').addEventListener('click', ()=>{ $('#imageFileInput').click(); });
+  $('#imageFileInput').addEventListener('change', async (e)=>{
+    const file = e.target.files[0];
+    e.target.value = '';
+    if(!file) return;
+    if(!file.type.startsWith('image/')){ showToast('이미지 파일만 업로드할 수 있어요'); return; }
+    try{
+      const dataUrl = await readFileAsDataURL(file);
+      restoreLastSelection();
+      document.execCommand('insertHTML', false, buildImageEmbedHtml(dataUrl));
+      syncActiveBlockHtml();
+    }catch(err){ showToast('이미지를 불러오지 못했어요'); }
+  });
+
+  function restoreLastSelection(){
+    if(!lastSelectionRange) return;
+    const startNode = lastSelectionRange.startContainer;
+    const el = (startNode.nodeType === 3 ? startNode.parentElement : startNode);
+    const contentEl = el && el.closest ? el.closest('.content') : null;
+    if(contentEl) contentEl.focus();
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    try{ sel.addRange(lastSelectionRange); }catch(err){}
+  }
+
+  $('#tableBtn').addEventListener('mousedown', e=>e.preventDefault());
+  $('#tableBtn').addEventListener('click', ()=>{
+    const html = `<table><tr><th>항목</th><th>내용</th><th>출처</th></tr><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr></table>`;
+    document.execCommand('insertHTML', false, html);
+    syncActiveBlockHtml();
+  });
+
+  $('#dividerBtn').addEventListener('mousedown', e=>e.preventDefault());
+  $('#dividerBtn').addEventListener('click', ()=>{
+    document.execCommand('insertHorizontalRule', false, null);
+    syncActiveBlockHtml();
+  });
+
+  $('#clearFormatBtn').addEventListener('mousedown', e=>e.preventDefault());
+  $('#clearFormatBtn').addEventListener('click', ()=>{
+    document.execCommand('removeFormat', false, null);
+    document.execCommand('hiliteColor', false, 'transparent');
+    syncActiveBlockHtml();
+  });
+
+  function syncContentAncestor(node){
+    const contentEl = node.closest('.content');
+    if(!contentEl) return;
+    const tab = getActiveTab();
+    const block = tab.blocks.find(b => b.id === contentEl.dataset.id);
+    if(block){ block.html = contentEl.innerHTML; updateWordCount(); scheduleSave(); }
+  }
+
+  // ---------- image embed: align + resize ----------
+  $('#outline').addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-align-btn]');
+    if(!btn) return;
+    e.preventDefault(); e.stopPropagation();
+    const embed = btn.closest('.img-embed');
+    if(!embed) return;
+    embed.dataset.align = btn.dataset.alignBtn;
+    syncContentAncestor(embed);
+  });
+
+  let resizingEmbed = null, resizeStartX = 0, resizeStartW = 0;
+  $('#outline').addEventListener('mousedown', (e)=>{
+    const handle = e.target.closest('.img-resize-handle');
+    if(!handle) return;
+    e.preventDefault(); e.stopPropagation();
+    const embed = handle.closest('.img-embed');
+    const img = embed.querySelector('img');
+    resizingEmbed = embed;
+    resizeStartX = e.clientX;
+    resizeStartW = img.getBoundingClientRect().width;
+    document.addEventListener('mousemove', onImgResizeMove);
+    document.addEventListener('mouseup', onImgResizeUp);
+  });
+  function onImgResizeMove(e){
+    if(!resizingEmbed) return;
+    const img = resizingEmbed.querySelector('img');
+    const parent = resizingEmbed.closest('.content');
+    const maxW = parent ? parent.getBoundingClientRect().width : 700;
+    let newW = Math.max(60, resizeStartW + (e.clientX - resizeStartX));
+    newW = Math.min(newW, maxW);
+    img.style.width = newW + 'px';
+    resizingEmbed.style.width = newW + 'px';
+  }
+  function onImgResizeUp(){
+    if(resizingEmbed) syncContentAncestor(resizingEmbed);
+    resizingEmbed = null;
+    document.removeEventListener('mousemove', onImgResizeMove);
+    document.removeEventListener('mouseup', onImgResizeUp);
+  }
+
+  function syncActiveBlockHtml(){
+    const el = document.activeElement;
+    if(el && el.classList && el.classList.contains('content')){
+      const tab = getActiveTab();
+      const block = tab.blocks.find(b=>b.id === el.dataset.id);
+      if(block){ block.html = el.innerHTML; updateWordCount(); scheduleSave(); }
+    }
+  }
+
+  // ---------- selection char-count check ----------
+  $('#charCountBtn').addEventListener('mousedown', e=>e.preventDefault());
+  $('#charCountBtn').addEventListener('click', (e)=>{
+    const sel = window.getSelection();
+    const text = sel ? sel.toString() : '';
+    if(!text){ showToast('먼저 확인할 문장이나 문단을 드래그해서 선택해주세요'); return; }
+    const withSpace = text.length;
+    const withoutSpace = text.replace(/\s/g,'').length;
+    const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+    $('#ccpWith').textContent = withSpace + '자';
+    $('#ccpWithout').textContent = withoutSpace + '자';
+    $('#ccpWords').textContent = words + '개';
+    const pop = $('#charCountPopover');
+    const rect = e.target.getBoundingClientRect();
+    pop.style.display = 'block';
+    let left = rect.left;
+    if(left + 220 > window.innerWidth) left = window.innerWidth - 230;
+    pop.style.left = left + 'px';
+    pop.style.top = (rect.bottom + 8) + 'px';
+  });
+  $('#ccpCloseBtn').addEventListener('click', ()=>{ $('#charCountPopover').style.display = 'none'; });
+  document.addEventListener('mousedown', (e)=>{
+    const pop = $('#charCountPopover');
+    if(pop.style.display === 'block' && !pop.contains(e.target) && e.target.id !== 'charCountBtn'){
+      pop.style.display = 'none';
+    }
+  });
+
+  // ---------- spell check (opens 나라스펠러 in a new tab with the text copied) ----------
+  // nara-speller.co.kr has no public/CORS-enabled API, so we can't call it automatically
+  // from the browser. Instead we copy the current note's plain text to the clipboard and
+  // open the checker in a new tab — paste with Ctrl+V there to run the check.
+  $('#spellcheckBtn').addEventListener('mousedown', e=>e.preventDefault());
+  $('#spellcheckBtn').addEventListener('click', async ()=>{
+    const tab = getActiveTab();
+    if(!tab) return;
+    let text = tab.title ? tab.title + '\n\n' : '';
+    tab.blocks.forEach(b=>{ text += plainTextOf(b.html) + '\n'; });
+    text = text.replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim();
+    if(!text){ showToast('검사할 내용이 없어요'); return; }
+    try{
+      await navigator.clipboard.writeText(text);
+      showToast('본문을 복사했어요 — 새 창에서 Ctrl+V로 붙여넣어 검사하세요');
+    }catch(e){
+      showToast('클립보드 복사에 실패했어요 — 직접 드래그해서 복사해주세요');
+    }
+    window.open('https://nara-speller.co.kr/speller/', '_blank', 'noopener');
+  });
+
+  // ---------- search ----------
+  $('#searchToggleBtn').addEventListener('click', ()=>{
+    const box = $('#searchBox');
+    box.style.display = box.style.display === 'flex' ? 'none' : 'flex';
+    if(box.style.display === 'flex') $('#searchInput').focus();
+  });
+  $('#searchCloseBtn').addEventListener('click', ()=>{ $('#searchBox').style.display = 'none'; });
+  function doFind(backwards){
+    const q = $('#searchInput').value;
+    if(!q) return;
+    if(window.find){ window.find(q, false, !!backwards, true); }
+  }
+  $('#searchNextBtn').addEventListener('click', ()=>doFind(false));
+  $('#searchPrevBtn').addEventListener('click', ()=>doFind(true));
+  $('#searchInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doFind(e.shiftKey); });
+
+  window.addEventListener('beforeunload', ()=>{ if(profile) saveProfile(); });
+
+})();
+</script>
+</body>
+</html>
