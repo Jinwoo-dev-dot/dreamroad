@@ -252,6 +252,23 @@ function jailEscapeUpdate(dt) {
   }
 }
 
+function jailSkip() {
+  const J = State.jail;
+  if (!J || J.releasing || J.executing || J.hearing || J.fight) return;
+  if (J.isDeathRow) {
+    J.executing = true;
+    setSubtitle('교도관', 2, '집행일이 밝았습니다.');
+    startExecutionSequence();
+  } else {
+    J.servedDays = J.sentenceDays;
+    J.releasing = true;
+    J.releaseT = 0;
+    State.player.controlLocked = true;
+    setSubtitle('교도관', 2, '형기를 마쳤습니다. 출소 절차를 진행합니다.');
+    if (typeof sfxRelease === 'function') sfxRelease();
+  }
+}
+
 function jailbreakSuccess() {
   if (typeof sfxEscape === 'function') sfxEscape();
   setSubtitle('나레이션', 3.2, '철조망을 넘었다! 하지만 곧 온 도시에 수배령이 내려질 것이다...');

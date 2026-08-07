@@ -99,6 +99,24 @@ html, body {
 #start-btn:hover { background: #d94540; }
 #start-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #7c1f1c; }
 
+#skip-jail-btn {
+  display: none;
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 6;
+  font-size: 13px;
+  padding: 9px 16px;
+  background: rgba(20, 20, 24, 0.75);
+  color: #ffd23f;
+  border: 1px solid rgba(255, 210, 63, 0.5);
+  border-radius: 6px;
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+#skip-jail-btn:hover { background: rgba(40, 36, 20, 0.85); }
+#skip-jail-btn:active { transform: translateY(1px); }
+
 .howto {
   margin-top: 28px;
   text-align: left;

@@ -19,6 +19,8 @@ function uiDraw(ctx) {
     drawJailHud(ctx);
   }
 
+  updateSkipButton();
+
   if (State.prompt) {
     ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'center';
@@ -200,6 +202,15 @@ function drawJailHud(ctx) {
     ctx.fillStyle = '#8affb0';
     ctx.fillText('출소', State.w / 2, State.h / 2);
   }
+}
+
+function updateSkipButton() {
+  const btn = document.getElementById('skip-jail-btn');
+  if (!btn) return;
+  const J = State.jail;
+  const usable = State.mode === 'jail' && J && !J.releasing && !J.executing && !J.hearing && !J.fight;
+  btn.style.display = usable ? 'block' : 'none';
+  btn.textContent = usable && J.isDeathRow ? '⏭ 집행일로 건너뛰기' : '⏭ 감옥 스킵';
 }
 
 // ---------- Title / end screens (DOM) ----------

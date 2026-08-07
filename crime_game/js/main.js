@@ -196,6 +196,8 @@ window.addEventListener('DOMContentLoaded', () => {
   if (btn) btn.addEventListener('click', startGame);
   const restartBtn = document.getElementById('restart-btn');
   if (restartBtn) restartBtn.addEventListener('click', startGame);
+  const skipBtn = document.getElementById('skip-jail-btn');
+  if (skipBtn) skipBtn.addEventListener('click', jailSkip);
 
   requestAnimationFrame(loop);
 });
